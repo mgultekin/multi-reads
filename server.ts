@@ -1,4 +1,4 @@
-import express, { type Request, type Response } from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -15,7 +15,64 @@ const isProd =
   process.env.npm_lifecycle_event === 'start';
 const PORT = isProd && process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(express.json({ limit: '10mb' }));
+interface RateLimitBucket {
+  count: number;
+  resetAt: number;
+}
+
+/**
+ * Creates a bounded in-memory fixed-window per-IP rate limiter middleware.
+ */
+function createFixedWindowRateLimiter(maxRequests: number, windowMs: number) {
+  const buckets = new Map<string, RateLimitBucket>();
+  const MAX_TRACKED_IPS = 5000;
+  let lastSweepAt = Date.now();
+
+  const sweepExpired = (now: number) => {
+    for (const [ip, entry] of buckets) {
+      if (now >= entry.resetAt) {
+        buckets.delete(ip);
+      }
+    }
+    lastSweepAt = now;
+  };
+
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const now = Date.now();
+    if (now - lastSweepAt >= windowMs || buckets.size >= MAX_TRACKED_IPS) {
+      sweepExpired(now);
+    }
+
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    const existing = buckets.get(clientIp);
+
+    if (!existing || now >= existing.resetAt) {
+      if (!existing && buckets.size >= MAX_TRACKED_IPS) {
+        const oldestKey = buckets.keys().next().value;
+        if (oldestKey !== undefined) {
+          buckets.delete(oldestKey);
+        }
+      }
+      buckets.set(clientIp, { count: 1, resetAt: now + windowMs });
+      next();
+      return;
+    }
+
+    if (existing.count >= maxRequests) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((existing.resetAt - now) / 1000));
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      res.status(429).json({ error: 'Rate limit exceeded. Please try again shortly.' });
+      return;
+    }
+
+    existing.count += 1;
+    next();
+  };
+}
+
+app.use('/api/gemini', createFixedWindowRateLimiter(60, 60_000));
+app.use('/api/gutenberg', createFixedWindowRateLimiter(20, 60_000));
+app.use(express.json({ limit: '100kb' }));
 
 // Helper to get Gemini client
 function getGeminiClient(userApiKey?: string): GoogleGenAI | null {

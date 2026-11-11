@@ -9,10 +9,10 @@
 [![Express](https://img.shields.io/badge/Express-4.21-000000?logo=express&logoColor=white)](https://expressjs.com/)
 [![Google Gemini API](https://img.shields.io/badge/Google_Gemini-Flash--Lite_%26_Flash-8E75B2?logo=google-gemini&logoColor=white)](https://ai.google.dev/)
 [![Firebase](https://img.shields.io/badge/Firebase-Spark_$0.00_Free_Tier-FFCA28?logo=firebase&logoColor=black)](https://firebase.google.com/)
-[![Zero Cost Guardrail](https://img.shields.io/badge/Billing_Guardrail-$0.00%2Fmo_Verified-10B981)](docs/ZERO_COST_GUARDRAIL_POLICY.md)
+[![Zero Cost Guardrail](https://img.shields.io/badge/Free--Tier_Guardrail-80%25_Auto--Cap-10B981)](docs/ZERO_COST_GUARDRAIL_POLICY.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-*An open-source, strictly **$0.00-cost** literary language acquisition platform born from the struggle of breaking past the B1 plateau in Italian—combining authentic world literature (`IT`, `ES`, `FR`, `DE`, `TR`, `EN`), `0ms` hybrid philological word breakdowns across **84 language pairs**, dynamic CEFR (`A1`–`C1`) adaptation, Anki-ready spaced repetition, and an in-app Free-Tier Quota Guardrail.*
+*An open-source literary language acquisition platform built to run within **$0.00 free-tier limits** for personal study—born from the struggle of breaking past the B1 plateau in Italian, combining authentic world literature (`IT`, `ES`, `FR`, `DE`, `TR`, `EN`), `0ms` hybrid philological word breakdowns across **84 language pairs**, dynamic CEFR (`A1`–`C1`) adaptation, Anki-ready spaced repetition, and an in-app Free-Tier Quota Guardrail.*
 
 **[🖼️ Interactive Visual Showcase (`docs/showcase/index.html`)](docs/showcase/index.html)** · **[✍️ Read Our Medium Journey Story](docs/MEDIUM_STORY_OUR_JOURNEY.md)** · **[🛡️ $0.00 Guardrail Policy](docs/ZERO_COST_GUARDRAIL_POLICY.md)** · **[📋 Use-Case Catalog](docs/PRODUCT_USE_CASES_v0.5.0.md)**
 
@@ -89,7 +89,7 @@ Yet opening an unmodified foreign book creates immediate friction: looking up 10
 
 ### 3. 🛡️ Live `$0.00` Free-Tier Guardrail & Quota Monitor (`SettingsModal.tsx` + `costTelemetry.ts`)
 
-FolioLingo is engineered to run at **`$0.00/month`** on the **Firebase Spark Plan (Free Forever)** and **Google AI Studio Free Tier**, verified by an in-app telemetry dashboard and an automatic **80% Circuit Breaker**:
+FolioLingo is designed for personal study within free-tier limits on the **Firebase Spark Plan** and **Google AI Studio Free Tier**, monitored by an in-app telemetry dashboard and an automatic **80% Circuit Breaker**:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -169,7 +169,7 @@ FolioLingo (`v0.6.0`–`v0.6.1`) was audited, cross-verified, and upgraded by a 
 | Document | Description |
 | :--- | :--- |
 | **[`docs/showcase/index.html`](docs/showcase/index.html)** | **Interactive Product Showcase & Screenshot Press Kit** (Italian Reader flow, 0ms Popover, Wordbook, `$0.00` Guardrail Panel & Swarm diagram). |
-| **[`docs/MEDIUM_STORY_OUR_JOURNEY.md`](docs/MEDIUM_STORY_OUR_JOURNEY.md)** | **Medium Feature Article**: *"How I Built an AI Language Reader for $0.00—and Commanded a 7-Agent AI Swarm as My Product Squad"*. |
+| **[`docs/MEDIUM_STORY_OUR_JOURNEY.md`](docs/MEDIUM_STORY_OUR_JOURNEY.md)** | **Medium Feature Article**: *"I Got Stuck Learning Italian, So I Hired a 7-Agent AI Swarm to Build My Way Out (for $0.00)"*. |
 | **[`docs/ZERO_COST_GUARDRAIL_POLICY.md`](docs/ZERO_COST_GUARDRAIL_POLICY.md)** | **Zero-Cost Billing Verification & Guardrail Policy**: Exact Firebase Spark & Gemini Free Tier math, 80% circuit-breaker equations, and audit trail. |
 | **[`docs/SQUAD_EXPANSION_PLAN_v0.6.0.md`](docs/SQUAD_EXPANSION_PLAN_v0.6.0.md)** | **7-Agent Swarm Consolidated Audit & Expansion Plan**: Engineering, UX/WCAG, Optimization, Marketing, Finance (1K/10K/100K MAU), and Verifier sign-off. |
 | **[`docs/PRODUCT_USE_CASES_v0.5.0.md`](docs/PRODUCT_USE_CASES_v0.5.0.md)** | **Formal Use-Case Catalog (`UC-01` – `UC-12`)**: End-to-end acceptance criteria across all four functional pillars. |
@@ -191,7 +191,7 @@ FolioLingo (`v0.6.0`–`v0.6.1`) was audited, cross-verified, and upgraded by a 
 
 ---
 
-## 🛠️ Getting Started (100% Free / `$0.00` Setup)
+## 🛠️ Getting Started (Personal Free-Tier Setup)
 
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v20+ recommended)
@@ -221,6 +221,10 @@ npm run dev
 ```
 Open `http://localhost:3000` to launch FolioLingo, or open `docs/showcase/index.html` directly to view the interactive visual press kit.
 
+### Self-Hosting & Security Note
+- `server.ts` is intended for **local or personal use** (enforcing a `100kb` JSON request body cap and per-IP rate limits on `/api/gemini/*` and `/api/gutenberg/*`).
+- If deploying to a public multi-user server, leave `GEMINI_API_KEY` unset on the server so readers run in **Zero-AI Dictionary Mode** or supply their own browser-local **BYOK** key, or place authentication/reverse-proxy protection in front of your API routes.
+
 ---
 
 ## 👤 Author & Product Owner
@@ -228,7 +232,6 @@ Open `http://localhost:3000` to launch FolioLingo, or open `docs/showcase/index.
 **Mustafa Gültekin**  
 - GitHub: [@mgultekin](https://github.com/mgultekin)
 - Repository: [https://github.com/mgultekin/multi-reads](https://github.com/mgultekin/multi-reads)
-- Email: [mustafagultekinn01@gmail.com](mailto:mustafagultekinn01@gmail.com)
 
 ---
 

@@ -1,14 +1,14 @@
 # FolioLingo Zero-Cost Guardrail & Quota Governance Policy (`v0.6.0`)
 
 **Status:** Active & Enforced in Code (`src/services/costTelemetry.ts`, `src/services/firebaseSync.ts`, `src/services/geminiClient.ts`, `src/components/SettingsModal.tsx`)  
-**Verified Monthly Cloud & API Bill:** **`$0.00 / month`**  
+**Target Personal Cloud & API Bill:** **`$0.00 / month`** *(within provider free-tier limits)*
 **Owner:** FolioLingo Finance & Infrastructure Squad (`@finance`, `@optimizer`, `@eng-lead`, `@verifier`)
 
 ---
 
-## 1. Executive Summary & Strict `$0.00` Billing Verification
+## 1. Executive Summary & Free-Tier Billing Policy
 
-FolioLingo is architected from the ground up as a **local-first, zero-marginal-cost literary language studio**. Both in development and across our community deployment, FolioLingo operates strictly within **100% free, no-credit-card-overage cloud tiers**, backed by a deterministic **client-side 80% automatic circuit breaker** and **multi-tier offline dictionary fallback**.
+FolioLingo is architected from the ground up as a **local-first, low-marginal-cost literary language studio**. For personal study and low-volume deployments, FolioLingo is designed to stay within **no-card-required free-tier allowances**, backed by a deterministic **client-side 80% automatic circuit breaker** and **multi-tier offline dictionary fallback**.
 
 | Infrastructure Layer | Active Plan / Tier | Billing Method Required | Hard Daily Free Quota | Enforced 80% Circuit-Breaker Cap | Verified Billed Cost |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -21,7 +21,7 @@ FolioLingo is architected from the ground up as a **local-first, zero-marginal-c
 
 ## 2. Hard 80% Circuit-Breaker Mathematics (`src/services/costTelemetry.ts`)
 
-To guarantee that FolioLingo never exhausts daily free quotas—or incurs a single cent of overage even if a project is ever attached to a billed cloud account—`CostTelemetryService` (`src/services/costTelemetry.ts:22-28`) defines immutable daily ceilings and enforces an **80% safety guardrail ratio (`SAFETY_GUARDRAIL_RATIO = 0.8`)**:
+To help stay within daily free-tier limits—and stop automated client calls before crossing 80% of free quotas—`CostTelemetryService` (`src/services/costTelemetry.ts:22-28`) defines daily ceilings and enforces an **80% safety guardrail ratio (`SAFETY_GUARDRAIL_RATIO = 0.8`)**:
 
 ```ts
 export const FREE_TIER_LIMITS = {
@@ -29,7 +29,7 @@ export const FREE_TIER_LIMITS = {
   FIRESTORE_DAILY_WRITES: 20_000,
   FIRESTORE_DAILY_DELETES: 20_000,
   GEMINI_FREE_DAILY_REQUESTS: 1_500,
-  SAFETY_GUARDRAIL_RATIO: 0.8, // Trip circuit breaker at 80% of free tier to guarantee $0.00
+  SAFETY_GUARDRAIL_RATIO: 0.8, // Trip circuit breaker at 80% of free tier to help stay within free-tier limits
 } as const;
 ```
 
@@ -110,4 +110,4 @@ Users and auditors can inspect and control FolioLingo's zero-cost guardrails in 
 | **`v0.3.0`** | Instant Lexicon & Stemmer | Introduced `INSTANT_LEXICON`, rule-based morphological lemmatizer (`instantLexicon.ts`), and `offline_dictionary` IndexedDB hydration. | Deflected ~50%+ of common literary word lookups to 0ms client memory. | `$0.00` |
 | **`v0.4.0`** | Hybrid Prefetch Pipeline | Added 55ms hover prefetch (`preferFastDict: true`) and `/api/gemini/batch-prefetch` (`server.ts`, `geminiClient.ts`). | Increased zero-Gemini-quota word lookup deflection to **~87%**. | `$0.00` |
 | **`v0.5.0`** | Firebase Spark Sync & Squad Audit | Added Google OAuth & Firestore `/users/{uid}` sync (`firebaseSync.ts`); 7-agent Product Squad conducted full code & unit-economics audit (#8–#13). | Identified `syncUserOnLogin` 121x write amplification and uncached server CEFR/quiz endpoints. | `$0.00` |
-| **`v0.6.0`** | **Zero-Cost Guardrail & Delta Sync Release** | Added `costTelemetry.ts` (80% circuit breaker + Zero-AI mode + BYOK), watermarked `writeBatch` delta sync in `firebaseSync.ts`, true LRU + `serverAdaptationCache` in `server.ts`, and live quota monitor UI in `SettingsModal.tsx`. | **-89% to -99.7% Firestore login writes**; hard-capped at 80% of Spark & AI Studio free tiers. | **`$0.00` (Guaranteed)** |
+| **`v0.6.0`** | **Zero-Cost Guardrail & Delta Sync Release** | Added `costTelemetry.ts` (80% circuit breaker + Zero-AI mode + BYOK), watermarked `writeBatch` delta sync in `firebaseSync.ts`, true LRU + `serverAdaptationCache` in `server.ts`, and live quota monitor UI in `SettingsModal.tsx`. | **-89% to -99.7% Firestore login writes**; hard-capped at 80% of Spark & AI Studio free tiers. | **`$0.00` (80% Free-Tier Capped)** |
