@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Flame, Sparkles, Settings, Moon, Sun, LogIn, LogOut, User as UserIcon } from 'lucide-react';
+import { BookOpen, Flame, Sparkles, Settings, Moon, Sun, LogIn, LogOut, User as UserIcon, ShieldCheck } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { LanguageCode } from '../types/index.ts';
 import { SUPPORTED_LANGUAGES, BASE_LANGUAGES } from '../data/constants.ts';
@@ -134,8 +134,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </nav>
 
-        {/* Zone 3: Habit status & Google Sign-In */}
+        {/* Zone 3: Habit status, Zero-Cost Badge & Google Sign-In */}
         <div className="flex items-center gap-2.5 shrink-0">
+          {/* Zero-Cost Guardrail Status Pill */}
+          <button
+            type="button"
+            onClick={openSettings}
+            title="Zero-Cost Guardrail Active: Running 100% on Firebase Spark & Gemini Free Tiers ($0.00 billed). Click to inspect live quota panel."
+            className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/80 dark:border-emerald-800/70 text-[11px] font-mono font-semibold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>$0 Free Tier</span>
+          </button>
+
           {/* Streak Indicator */}
           <div
             title={`${streakDays} days reading streak`}

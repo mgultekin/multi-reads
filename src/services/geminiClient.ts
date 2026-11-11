@@ -1,6 +1,7 @@
 import { CEFRLevel, WordBreakdown } from '../types/index.ts';
 import { analyzeOfflineMorphology, lookupInstantWord } from './instantLexicon.ts';
 import { storageService } from './storageService.ts';
+import { costTelemetry } from './costTelemetry.ts';
 
 export interface QuizQuestion {
   id: string;
@@ -303,6 +304,7 @@ class GeminiClientService {
 
     // 1. Check L1 Session / Hover-Prefetch Cache (0ms latency, 0 Gemini API calls)
     if (this.sessionWordCache.has(cacheKey)) {
+      costTelemetry.recordLookupSource('cache');
       const cached = this.sessionWordCache.get(cacheKey)!;
       return {
         ...cached,
@@ -326,6 +328,7 @@ class GeminiClientService {
     const langCode = targetLangCode || targetLangName.toLowerCase().slice(0, 2);
     const instantHit = lookupInstantWord(cleanWord, langCode, baseLangName, sentence, cachedSentence);
     if (instantHit) {
+      costTelemetry.recordLookupSource('lexicon');
       this.sessionWordCache.set(cacheKey, instantHit);
       // Only fetch sentence translation via fast dictionary if sentence wasn't cached yet
       if (!cachedSentence && onEnrich) {
@@ -388,6 +391,10 @@ class GeminiClientService {
     options?: { preferFastDict?: boolean; forceAi?: boolean }
   ): Promise<WordBreakdown> {
     const startTime = performance.now();
+    const canUseGemini = costTelemetry.canPerformGeminiCall();
+    const forceFastDict = Boolean(options?.preferFastDict) || !canUseGemini;
+    const forceAi = Boolean(options?.forceAi) && canUseGemini;
+    const customApiKey = costTelemetry.getCustomGeminiApiKey() || undefined;
 
     try {
       const res = await fetch('/api/gemini/breakdown', {
@@ -398,8 +405,9 @@ class GeminiClientService {
           sentence: sentence.trim(),
           targetLang: targetLangName,
           baseLang: baseLangName,
-          preferFastDict: Boolean(options?.preferFastDict),
-          forceAi: Boolean(options?.forceAi),
+          preferFastDict: forceFastDict,
+          forceAi,
+          customApiKey,
         }),
       });
 
@@ -410,6 +418,11 @@ class GeminiClientService {
 
       const data = await res.json();
       if (data.breakdown) {
+        if (data.breakdown.sourceEngine === 'gemini') {
+          costTelemetry.recordLookupSource('gemini');
+        } else {
+          costTelemetry.recordLookupSource('fast-dict');
+        }
         const clientLatency = Math.round(performance.now() - startTime);
         const result: WordBreakdown = {
           ...data.breakdown,
@@ -455,6 +468,10 @@ class GeminiClientService {
     targetLangName: string,
     baseLangName: string = 'English'
   ): Promise<SectionQuiz> {
+    if (!costTelemetry.canPerformGeminiCall()) {
+      return this.generateFallbackQuiz(textChunk, targetLangName, baseLangName);
+    }
+    const customApiKey = costTelemetry.getCustomGeminiApiKey() || undefined;
     try {
       const res = await fetch('/api/gemini/quiz', {
         method: 'POST',
@@ -463,6 +480,7 @@ class GeminiClientService {
           textChunk: textChunk.slice(0, 2500),
           targetLang: targetLangName,
           baseLang: baseLangName,
+          customApiKey,
         }),
       });
 
@@ -472,6 +490,7 @@ class GeminiClientService {
 
       const data = await res.json();
       if (data.quiz && Array.isArray(data.quiz.questions) && data.quiz.questions.length > 0) {
+        costTelemetry.recordLookupSource('gemini');
         return data.quiz;
       }
       throw new Error('Incomplete quiz structure');
@@ -489,7 +508,8 @@ class GeminiClientService {
     targetLangName: string,
     level: CEFRLevel
   ): Promise<string> {
-    if (level === 'Original') return text;
+    if (level === 'Original' || !costTelemetry.canPerformGeminiCall()) return text;
+    const customApiKey = costTelemetry.getCustomGeminiApiKey() || undefined;
 
     try {
       const res = await fetch('/api/gemini/adapt-cefr', {
@@ -499,6 +519,7 @@ class GeminiClientService {
           text,
           targetLang: targetLangName,
           level,
+          customApiKey,
         }),
       });
 
@@ -508,6 +529,9 @@ class GeminiClientService {
       }
 
       const data = await res.json();
+      if (data.adaptedText) {
+        costTelemetry.recordLookupSource('gemini');
+      }
       return data.adaptedText || text;
     } catch (err) {
       console.warn('Gemini CEFR adapt failed, returning original text:', err);

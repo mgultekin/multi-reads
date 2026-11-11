@@ -57,7 +57,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Connection test on boot
+// On-demand connection diagnostic (not called on cold boot to preserve 0-read free tier)
 export async function testFirestoreConnection(): Promise<boolean> {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
@@ -69,5 +69,3 @@ export async function testFirestoreConnection(): Promise<boolean> {
     return false;
   }
 }
-
-testFirestoreConnection();
