@@ -265,7 +265,7 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
               ) : (
                 <>
                   <Bookmark className="w-3.5 h-3.5" />
-                  Save to Wordbook (+5 XP)
+                  Save to Wordbook (+10 XP)
                 </>
               )}
             </button>

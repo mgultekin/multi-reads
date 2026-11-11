@@ -11,7 +11,8 @@ All notable architectural milestones, performance engineering updates, and Produ
 - **Server-Side Project Gutenberg Full-Text Proxy (`GET /api/gutenberg/:id`)**: Fetches complete UTF-8 public-domain manuscripts from Gutenberg mirrors, strips header/footer boilerplate, and automatically hydrates search cards into multi-section readings without browser CORS blocks (`UC-02`).
 - **"Continue Reading" Library Shelf**: Automatically tracks `currentChunkIndex` and `lastReadAt` per book and displays a prominent resume banner at the top of `LibraryView` (`UC-03`).
 - **Bilingual Parallel Reading Mode & Typeface Scale**: Added a `Parallel` toggle in `ReaderView` to display aligned native-language paragraph translations beneath the original prose, alongside a persistent `Aa·SM` / `Aa·MD` / `Aa·LG` font size switcher (`UC-05`).
-- **SRS Queue Filters & CSV/Anki Export**: Added `All Cards | Due for Review | Mastered` filter tabs and one-click CSV deck export in `WordbookView` (`UC-08`, `UC-10`).
+- **SRS Queue Filters & CSV/Anki Export**: Added `All Cards | Due for Review | Mastered` filter tabs and one-click CSV and Anki TSV deck exports in `WordbookView` (`UC-08`, `UC-10`).
+- **Offline Heuristic Dictionary & IndexedDB Lemmatizer**: Added an IndexedDB `offline_dictionary` object store seeded with `INSTANT_LEXICON` that automatically indexes newly encountered word breakdowns and performs rule-based offline morphological lemmatization (`analyzeOfflineMorphology`) across Spanish, French, German, Italian, Turkish, and English.
 - **Personal Analytics & Firestore Reading Log**: Replaced the redundant Supabase tab in `SocialLeagueView` with an **Analytics & Log** view synced with Firestore `/users/{uid}/reading_logs` (`UC-11`).
 - **Formal Use-Case Catalog (`UC-01` – `UC-12`)**: Added comprehensive Product Owner requirements and acceptance criteria in `docs/artifacts/v0.5.0_product_owner_use_cases.md`.
 

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Globe, Target, Check, Trash2, Type } from 'lucide-react';
+import { X, Globe, Target, Check, Trash2, Type, Database } from 'lucide-react';
 import { UserProfile } from '../types/index.ts';
 import { BASE_LANGUAGES } from '../data/constants.ts';
 import { storageService } from '../services/storageService.ts';
+import { getOfflineDictionaryCount } from '../services/instantLexicon.ts';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -177,6 +178,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <span>Dedicated (500w)</span>
               <span>Scholar (1500w)</span>
             </div>
+          </div>
+
+          {/* Offline Heuristic Dictionary Status (IndexedDB) */}
+          <div className="p-3 bg-stone-50 dark:bg-stone-900/70 rounded-xl border border-stone-200/80 dark:border-stone-800 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <Database className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
+              <div>
+                <span className="text-xs font-semibold text-stone-800 dark:text-stone-200 block">
+                  Offline Heuristic Dictionary (IndexedDB)
+                </span>
+                <span className="text-[11px] text-stone-500 dark:text-stone-400">
+                  Bundled multi-language lemmatizer & auto-expanding local lexicon
+                </span>
+              </div>
+            </div>
+            <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-md bg-amber-100/80 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 shrink-0">
+              {getOfflineDictionaryCount()} entries
+            </span>
           </div>
 
           {/* Iframe-Safe Two-Step Cache Cleanup */}

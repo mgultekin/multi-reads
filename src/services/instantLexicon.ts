@@ -172,9 +172,176 @@ export const INSTANT_LEXICON: Record<string, Record<string, LexiconEntry>> = {
  * Strips common romance elisions (l', d', qu', dell', un') and tests common inflection suffixes
  * to match a surface token against root entries in INSTANT_LEXICON.
  */
+export interface OfflineMorphologyAnalysis {
+  lemma: string;
+  pos: string;
+  morph: string;
+  affixNotes: string[];
+}
+
+/**
+ * Full rule-based offline morphological lemmatizer across ES, FR, DE, IT, TR, EN.
+ * Infers dictionary root lemma, part of speech, and inflectional morphology in 0ms without network.
+ */
+export function analyzeOfflineMorphology(rawWord: string, langCode: string): OfflineMorphologyAnalysis {
+  const clean = rawWord
+    .trim()
+    .replace(/^[«"'(—¡¿]+|[»"')!?,.:;—]+$/g, '');
+  const lower = clean.toLowerCase();
+  const affixNotes: string[] = [];
+
+  // Strip Romance elisions (l', d', qu', dell', all', nell', sull')
+  const elisionMatch = lower.match(/^(l|d|qu|n|s|c|j|m|t|un|dell|all|nell|sull)['’](.+)$/i);
+  const core = elisionMatch ? elisionMatch[2] : lower;
+  if (elisionMatch) {
+    affixNotes.push(`Elided prefix (${elisionMatch[1]}')`);
+  }
+
+  if (langCode === 'es') {
+    // Enclitic pronouns on infinitives/gerunds (e.g. acordarme, decirle, haciéndolo)
+    const enclitic = core.match(/^(.+?(?:ar|er|ir|ando|iendo))(me|te|se|lo|la|le|nos|os|los|las|les)$/);
+    if (enclitic && enclitic[1].length >= 4) {
+      const base = enclitic[1].replace(/(ando|iendo)$/, 'ar');
+      affixNotes.push(`Enclitic pronoun (-${enclitic[2]})`);
+      return {
+        lemma: base,
+        pos: 'Verb (Pronominal)',
+        morph: `Verb with enclitic object/reflexive pronoun (-${enclitic[2]})`,
+        affixNotes,
+      };
+    }
+    if (core.endsWith('ando') && core.length > 5) {
+      return { lemma: `${core.slice(0, -4)}ar`, pos: 'Verb (Gerund)', morph: 'Present participle (-ando)', affixNotes };
+    }
+    if (core.endsWith('iendo') && core.length > 6) {
+      return { lemma: `${core.slice(0, -5)}er`, pos: 'Verb (Gerund)', morph: 'Present participle (-iendo)', affixNotes };
+    }
+    if ((core.endsWith('aba') || core.endsWith('aban') || core.endsWith('abas')) && core.length > 5) {
+      return { lemma: core.replace(/(aban|abas|aba)$/, 'ar'), pos: 'Verb (Imperfect)', morph: 'Past imperfect indicative (-aba)', affixNotes };
+    }
+    if ((core.endsWith('ía') || core.endsWith('ían') || core.endsWith('ías')) && core.length > 4) {
+      return { lemma: core.replace(/(ían|ías|ía)$/, 'er'), pos: 'Verb (Imperfect/Conditional)', morph: 'Imperfect or conditional tense (-ía)', affixNotes };
+    }
+    if ((core.endsWith('aron') || core.endsWith('ieron')) && core.length > 6) {
+      return {
+        lemma: core.endsWith('aron') ? `${core.slice(0, -4)}ar` : `${core.slice(0, -5)}ir`,
+        pos: 'Verb (Preterite)',
+        morph: '3rd person plural preterite indicative',
+        affixNotes,
+      };
+    }
+    if (core.endsWith('mente') && core.length > 7) {
+      return { lemma: core.slice(0, -5), pos: 'Adverb', morph: 'Adverb of manner (-mente)', affixNotes };
+    }
+    if (core.endsWith('ción') || core.endsWith('sión')) {
+      return { lemma: core, pos: 'Noun (Feminine)', morph: 'Abstract feminine singular noun', affixNotes };
+    }
+    if (core.endsWith('dad') || core.endsWith('tad')) {
+      return { lemma: core, pos: 'Noun (Feminine)', morph: 'Abstract quality noun (-dad)', affixNotes };
+    }
+  } else if (langCode === 'fr') {
+    if ((core.endsWith('ait') || core.endsWith('aient') || core.endsWith('ais')) && core.length > 5) {
+      return { lemma: core.replace(/(aient|ait|ais)$/, 'er'), pos: 'Verb (Imparfait)', morph: 'Imperfect indicative', affixNotes };
+    }
+    if (core.endsWith('ant') && core.length > 5) {
+      return { lemma: `${core.slice(0, -3)}er`, pos: 'Verb (Participle)', morph: 'Present participle (-ant)', affixNotes };
+    }
+    if (core.endsWith('ment') && core.length > 6) {
+      return { lemma: core.slice(0, -4), pos: 'Adverb', morph: 'Derived adverb (-ment)', affixNotes };
+    }
+    if (core.endsWith('tion') || core.endsWith('sion')) {
+      return { lemma: core, pos: 'Noun (Feminine)', morph: 'Feminine abstract noun', affixNotes };
+    }
+    if (core.endsWith('aux') && core.length > 4) {
+      return { lemma: `${core.slice(0, -3)}al`, pos: 'Noun / Adjective', morph: 'Masculine plural (-aux → -al)', affixNotes };
+    }
+  } else if (langCode === 'de') {
+    const isCapitalized = /^[A-ZÄÖÜ]/.test(clean);
+    if (core.endsWith('ung') && isCapitalized && core.length > 5) {
+      return { lemma: clean, pos: 'Noun (Feminine)', morph: 'Feminine nominalization (die -ung)', affixNotes };
+    }
+    if ((core.endsWith('heit') || core.endsWith('keit')) && isCapitalized) {
+      return { lemma: clean, pos: 'Noun (Feminine)', morph: 'Abstract feminine noun (-heit/-keit)', affixNotes };
+    }
+    if (isCapitalized) {
+      return { lemma: clean, pos: 'Noun (Substantive)', morph: 'German capitalized noun', affixNotes };
+    }
+    if (core.startsWith('ge') && (core.endsWith('t') || core.endsWith('en')) && core.length > 5) {
+      return { lemma: core.replace(/^ge/, '').replace(/t$/, 'en'), pos: 'Verb (Partizip II)', morph: 'Past participle (ge-...-t/-en)', affixNotes };
+    }
+    if ((core.endsWith('te') || core.endsWith('ten')) && core.length > 5) {
+      return { lemma: core.replace(/(ten|te)$/, 'en'), pos: 'Verb (Präteritum)', morph: 'Simple past tense (-te/-ten)', affixNotes };
+    }
+  } else if (langCode === 'it') {
+    if ((core.endsWith('ava') || core.endsWith('avano') || core.endsWith('eva') || core.endsWith('evano')) && core.length > 5) {
+      return {
+        lemma: core.replace(/(avano|ava)$/, 'are').replace(/(evano|eva)$/, 'ere'),
+        pos: 'Verb (Imperfetto)',
+        morph: 'Past imperfect indicative',
+        affixNotes,
+      };
+    }
+    if ((core.endsWith('ando') || core.endsWith('endo')) && core.length > 5) {
+      return {
+        lemma: core.endsWith('ando') ? `${core.slice(0, -4)}are` : `${core.slice(0, -4)}ere`,
+        pos: 'Verb (Gerundio)',
+        morph: 'Progressive gerund',
+        affixNotes,
+      };
+    }
+    if (core.endsWith('mente') && core.length > 7) {
+      return { lemma: core.slice(0, -5), pos: 'Adverb', morph: 'Manner adverb (-mente)', affixNotes };
+    }
+    if (core.endsWith('zione') && core.length > 6) {
+      return { lemma: core, pos: 'Noun (Feminine)', morph: 'Feminine singular abstract noun (-zione)', affixNotes };
+    }
+  } else if (langCode === 'tr') {
+    if ((core.endsWith('yorum') || core.endsWith('yorsun') || core.endsWith('yor') || core.endsWith('yordu') || core.endsWith('yorlar')) && core.length > 5) {
+      const stem = core.replace(/[ıiuü]?yor(um|sun|du|lar)?$/, '');
+      return { lemma: `${stem}mek`, pos: 'Fiil (Şimdiki Zaman)', morph: 'Continuous aspect (-yor)', affixNotes };
+    }
+    if ((core.endsWith('mış') || core.endsWith('miş') || core.endsWith('muş') || core.endsWith('müş')) && core.length > 5) {
+      return { lemma: `${core.slice(0, -3)}mek`, pos: 'Fiil (Duyulan Geçmiş)', morph: 'Evidential past tense (-mış/-miş)', affixNotes };
+    }
+    if ((core.endsWith('acak') || core.endsWith('ecek')) && core.length > 6) {
+      return { lemma: `${core.slice(0, -4)}mek`, pos: 'Fiil (Gelecek Zaman)', morph: 'Future tense (-acak/-ecek)', affixNotes };
+    }
+    if ((core.endsWith('lar') || core.endsWith('ler')) && core.length > 5) {
+      return { lemma: core.slice(0, -3), pos: 'İsim (Çoğul)', morph: 'Plural suffix (-lar/-ler)', affixNotes };
+    }
+    if ((core.endsWith('dan') || core.endsWith('den') || core.endsWith('tan') || core.endsWith('ten')) && core.length > 5) {
+      return { lemma: core.slice(0, -3), pos: 'İsim (Ayrılma Hâli)', morph: 'Ablative case (-dan/-den)', affixNotes };
+    }
+    if ((core.endsWith('da') || core.endsWith('de') || core.endsWith('ta') || core.endsWith('te')) && core.length > 4) {
+      return { lemma: core.slice(0, -2), pos: 'İsim (Bulunma Hâli)', morph: 'Locative case (-da/-de)', affixNotes };
+    }
+  } else if (langCode === 'en') {
+    if (core.endsWith('ing') && core.length > 5) {
+      return { lemma: core.slice(0, -3), pos: 'Verb (Participle/Gerund)', morph: 'Progressive form (-ing)', affixNotes };
+    }
+    if (core.endsWith('ed') && core.length > 4) {
+      return { lemma: core.slice(0, -2), pos: 'Verb (Past)', morph: 'Past tense / participle (-ed)', affixNotes };
+    }
+    if (core.endsWith('ly') && core.length > 4) {
+      return { lemma: core.slice(0, -2), pos: 'Adverb', morph: 'Manner adverb (-ly)', affixNotes };
+    }
+    if (core.endsWith('ness') && core.length > 6) {
+      return { lemma: core.slice(0, -4), pos: 'Noun', morph: 'State/quality noun (-ness)', affixNotes };
+    }
+  }
+
+  return {
+    lemma: core,
+    pos: 'Word',
+    morph: affixNotes.length > 0 ? affixNotes.join(' · ') : 'Contextual form',
+    affixNotes,
+  };
+}
+
 function findEntryWithStemming(
   cleanWord: string,
-  langDict: Record<string, LexiconEntry>
+  langDict: Record<string, LexiconEntry>,
+  langCode?: string
 ): { entry: LexiconEntry; inflectedNote?: string } | null {
   if (langDict[cleanWord]) {
     return { entry: langDict[cleanWord] };
@@ -189,6 +356,17 @@ function findEntryWithStemming(
       entry: langDict[core],
       inflectedNote: elisionMatch ? `Elided form of "${core}"` : undefined,
     };
+  }
+
+  // Try morphological lemmatizer root lookup
+  if (langCode) {
+    const morphAnalysis = analyzeOfflineMorphology(core, langCode);
+    if (morphAnalysis.lemma && langDict[morphAnalysis.lemma.toLowerCase()]) {
+      return {
+        entry: langDict[morphAnalysis.lemma.toLowerCase()],
+        inflectedNote: `${morphAnalysis.pos} (${morphAnalysis.morph})`,
+      };
+    }
   }
 
   // Try common plural / inflection suffixes (-s, -es, -lar, -ler, -en)
@@ -216,7 +394,54 @@ function findEntryWithStemming(
 }
 
 /**
- * Instant local lookup (<1ms) with inflection stemming.
+ * Runtime expandable dictionary map (hydrated from IndexedDB `offline_dictionary` store)
+ */
+const runtimeOfflineEntries: Record<string, Record<string, LexiconEntry>> = {
+  es: {},
+  fr: {},
+  de: {},
+  it: {},
+  tr: {},
+  en: {},
+};
+
+export function registerOfflineDictionaryEntry(
+  langCode: string,
+  wordOrLemma: string,
+  entry: LexiconEntry
+): void {
+  const code = langCode.toLowerCase().slice(0, 2);
+  if (!runtimeOfflineEntries[code]) {
+    runtimeOfflineEntries[code] = {};
+  }
+  const key = wordOrLemma.toLowerCase().trim();
+  if (!key) return;
+  const existing = runtimeOfflineEntries[code][key];
+  runtimeOfflineEntries[code][key] = {
+    lemma: entry.lemma || existing?.lemma || key,
+    pos: entry.pos || existing?.pos || 'Word',
+    morph: entry.morph || existing?.morph || 'Contextual form',
+    translations: {
+      ...(existing?.translations || {}),
+      ...entry.translations,
+    },
+  };
+}
+
+export function getOfflineDictionaryCount(): number {
+  let total = 0;
+  for (const lang of Object.keys(INSTANT_LEXICON)) {
+    const mergedKeys = new Set([
+      ...Object.keys(INSTANT_LEXICON[lang] || {}),
+      ...Object.keys(runtimeOfflineEntries[lang] || {}),
+    ]);
+    total += mergedKeys.size;
+  }
+  return total;
+}
+
+/**
+ * Instant local lookup (<1ms) with inflection stemming + IndexedDB runtime dictionary entries.
  * Eliminates network & Gemini API calls for covered vocabulary.
  */
 export function lookupInstantWord(
@@ -232,14 +457,16 @@ export function lookupInstantWord(
     .replace(/^[«"'(—¡¿]+|[»"')!?,.:;—]+$/g, '');
   if (!clean) return null;
 
-  const langDict = INSTANT_LEXICON[targetLangCode];
-  if (!langDict) return null;
+  const combinedDict: Record<string, LexiconEntry> = {
+    ...(INSTANT_LEXICON[targetLangCode] || {}),
+    ...(runtimeOfflineEntries[targetLangCode] || {}),
+  };
 
-  const match = findEntryWithStemming(clean, langDict);
+  const match = findEntryWithStemming(clean, combinedDict, targetLangCode);
   if (!match) return null;
 
   const { entry, inflectedNote } = match;
-  const translation = entry.translations[baseLangName];
+  const translation = entry.translations[baseLangName] || entry.translations.English;
   if (!translation) return null;
 
   return {
@@ -249,7 +476,7 @@ export function lookupInstantWord(
     partOfSpeech: entry.pos,
     morphology: inflectedNote ? `${entry.morph} · ${inflectedNote}` : entry.morph,
     sentenceTranslation: cachedSentenceTranslation || surroundingSentence,
-    usageNote: `Resolved instantly via Local Lexicon (${baseLangName}).`,
+    usageNote: `Resolved instantly via Offline Heuristic Dictionary (${baseLangName}).`,
     contextSentence: surroundingSentence,
     targetLang: targetLangCode,
     latencyMs: 0,

@@ -1,9 +1,22 @@
 import { ContentItem, Flashcard, LanguageCode, ReadingLogEntry, UserProfile } from '../types/index.ts';
 import { INITIAL_CURATED_BOOKS } from '../data/constants.ts';
+import {
+  INSTANT_LEXICON,
+  LexiconEntry,
+  registerOfflineDictionaryEntry,
+} from './instantLexicon.ts';
 
 const DB_NAME = 'foliolingo_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const READING_LOGS_KEY = 'foliolingo_reading_logs';
+
+export interface StoredDictionaryRecord {
+  id: string; // `${langCode}__${word}`
+  langCode: string;
+  word: string;
+  entry: LexiconEntry;
+  updatedAt: number;
+}
 
 class StorageService {
   private dbPromise: Promise<IDBDatabase> | null = null;
@@ -11,7 +24,9 @@ class StorageService {
 
   constructor() {
     if (this.isIndexedDbAvailable) {
-      this.initDb();
+      this.initDb().then(() => {
+        this.hydrateOfflineDictionary();
+      }).catch(() => {});
     }
   }
 
@@ -39,6 +54,11 @@ class StorageService {
 
           if (!db.objectStoreNames.contains('cefr_cache')) {
             db.createObjectStore('cefr_cache', { keyPath: 'key' });
+          }
+
+          if (!db.objectStoreNames.contains('offline_dictionary')) {
+            const dictStore = db.createObjectStore('offline_dictionary', { keyPath: 'id' });
+            dictStore.createIndex('langCode', 'langCode', { unique: false });
           }
         };
 
@@ -187,6 +207,105 @@ class StorageService {
       const db = await this.initDb();
       const tx = db.transaction('cefr_cache', 'readwrite');
       tx.objectStore('cefr_cache').clear();
+    } catch {
+      // ignore
+    }
+  }
+
+  // --- OFFLINE HEURISTIC DICTIONARY (IndexedDB) ---
+  private async hydrateOfflineDictionary(): Promise<void> {
+    try {
+      const db = await this.initDb();
+      const tx = db.transaction('offline_dictionary', 'readonly');
+      const store = tx.objectStore('offline_dictionary');
+      const req = store.getAll();
+
+      req.onsuccess = () => {
+        const records = (req.result as StoredDictionaryRecord[]) || [];
+        if (records.length === 0) {
+          this.seedOfflineDictionary();
+        } else {
+          for (const rec of records) {
+            registerOfflineDictionaryEntry(rec.langCode, rec.word, rec.entry);
+          }
+        }
+      };
+    } catch {
+      // ignore
+    }
+  }
+
+  private async seedOfflineDictionary(): Promise<void> {
+    try {
+      const db = await this.initDb();
+      const tx = db.transaction('offline_dictionary', 'readwrite');
+      const store = tx.objectStore('offline_dictionary');
+      const now = Date.now();
+
+      for (const [langCode, wordsMap] of Object.entries(INSTANT_LEXICON)) {
+        for (const [word, entry] of Object.entries(wordsMap)) {
+          const rec: StoredDictionaryRecord = {
+            id: `${langCode}__${word}`,
+            langCode,
+            word,
+            entry,
+            updatedAt: now,
+          };
+          store.put(rec);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  async saveOfflineDictionaryEntry(
+    langCode: string,
+    word: string,
+    lemma: string,
+    pos: string,
+    morph: string,
+    baseLangName: string,
+    translation: string
+  ): Promise<void> {
+    const cleanCode = langCode.toLowerCase().slice(0, 2);
+    const cleanWord = word.toLowerCase().trim();
+    if (!cleanWord || !translation) return;
+
+    const entry: LexiconEntry = {
+      lemma: lemma || cleanWord,
+      pos: pos || 'Word',
+      morph: morph || 'Contextual form',
+      translations: { [baseLangName]: translation },
+    };
+
+    registerOfflineDictionaryEntry(cleanCode, cleanWord, entry);
+
+    try {
+      const db = await this.initDb();
+      const tx = db.transaction('offline_dictionary', 'readwrite');
+      const store = tx.objectStore('offline_dictionary');
+      const id = `${cleanCode}__${cleanWord}`;
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const existing = getReq.result as StoredDictionaryRecord | undefined;
+        const mergedEntry: LexiconEntry = {
+          lemma: entry.lemma || existing?.entry.lemma || cleanWord,
+          pos: entry.pos || existing?.entry.pos || 'Word',
+          morph: entry.morph || existing?.entry.morph || 'Contextual form',
+          translations: {
+            ...(existing?.entry.translations || {}),
+            [baseLangName]: translation,
+          },
+        };
+        store.put({
+          id,
+          langCode: cleanCode,
+          word: cleanWord,
+          entry: mergedEntry,
+          updatedAt: Date.now(),
+        });
+      };
     } catch {
       // ignore
     }

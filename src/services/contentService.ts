@@ -28,7 +28,7 @@ class ContentService {
         const genre = this.detectGenreFromSubjects(subjects);
 
         results.push({
-          id: `gutenberg-${item.id}`,
+          id: `gutenberg-search-${item.id}`,
           title: item.title,
           author: authorName,
           language: lang,

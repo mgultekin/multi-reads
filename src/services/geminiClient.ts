@@ -1,5 +1,6 @@
 import { CEFRLevel, WordBreakdown } from '../types/index.ts';
-import { lookupInstantWord } from './instantLexicon.ts';
+import { analyzeOfflineMorphology, lookupInstantWord } from './instantLexicon.ts';
+import { storageService } from './storageService.ts';
 
 export interface QuizQuestion {
   id: string;
@@ -243,6 +244,7 @@ class GeminiClientService {
 
       // Store pre-cached word breakdowns
       if (data.words && typeof data.words === 'object') {
+        const langCode = targetLangName.toLowerCase().slice(0, 2);
         for (const { word, sentence } of candidateWords) {
           const lower = word.toLowerCase();
           const item = data.words[lower];
@@ -257,6 +259,17 @@ class GeminiClientService {
                 sourceEngine: 'prefetch',
               });
             }
+            storageService
+              .saveOfflineDictionaryEntry(
+                langCode,
+                word,
+                item.lemma || lower,
+                item.partOfSpeech || 'Word',
+                item.morphology || 'Contextual form',
+                baseLangName,
+                item.translation || word
+              )
+              .catch(() => {});
           }
         }
       }
@@ -412,6 +425,17 @@ class GeminiClientService {
 
         this.sessionWordCache.set(cacheKey, result);
         this.persistCaches();
+        storageService
+          .saveOfflineDictionaryEntry(
+            targetLangName.toLowerCase().slice(0, 2),
+            cleanWord,
+            result.lemma,
+            result.partOfSpeech,
+            result.morphology,
+            baseLangName,
+            result.translation
+          )
+          .catch(() => {});
         return result;
       }
       throw new Error('Invalid breakdown format received');
@@ -501,35 +525,20 @@ class GeminiClientService {
     baseLang: string
   ): WordBreakdown {
     const cachedSent = this.sentenceCache.get(this.buildSentenceCacheKey(sentence, baseLang));
-    const lemma = word.toLowerCase();
-    let pos = 'Word';
-    let morphology = 'Contextual form';
-
-    if (lemma.endsWith('ando') || lemma.endsWith('iendo') || lemma.endsWith('ant') || lemma.endsWith('erek')) {
-      pos = 'Verb (Gerund / Continuous)';
-      morphology = 'Continuous / Participle form';
-    } else if (lemma.endsWith('ado') || lemma.endsWith('ido') || lemma.endsWith('é') || lemma.endsWith('dı') || lemma.endsWith('di')) {
-      pos = 'Verb (Past Form)';
-      morphology = 'Past tense / Perfective aspect';
-    } else if (lemma.endsWith('mente') || lemma.endsWith('ment') || lemma.endsWith('ca') || lemma.endsWith('ce')) {
-      pos = 'Adverb';
-      morphology = 'Manner / Modifying adverb';
-    } else if (lemma.endsWith('ción') || lemma.endsWith('tion') || lemma.endsWith('heit') || lemma.endsWith('lik')) {
-      pos = 'Noun';
-      morphology = 'Substantive concept';
-    }
+    const langCode = targetLang.toLowerCase().slice(0, 2);
+    const morphAnalysis = analyzeOfflineMorphology(word, langCode);
 
     return {
       word,
       translation: word,
-      lemma,
-      partOfSpeech: pos,
-      morphology: `${morphology} in ${targetLang}`,
+      lemma: morphAnalysis.lemma,
+      partOfSpeech: morphAnalysis.pos,
+      morphology: `${morphAnalysis.morph} (${targetLang})`,
       sentenceTranslation: cachedSent || sentence,
-      usageNote: `Contextual usage in ${targetLang}.`,
+      usageNote: `Analyzed offline via Heuristic Morphological Lemmatizer (${targetLang}).`,
       contextSentence: sentence,
       targetLang,
-      sourceEngine: 'backup-translator',
+      sourceEngine: 'lexicon',
       isEnriching: false,
     };
   }

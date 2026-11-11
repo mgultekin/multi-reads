@@ -102,11 +102,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const filteredBooks = books.filter((book) => {
     const matchesLang = book.language === targetLang;
     const matchesGenre = selectedGenre === 'all' || book.genre === selectedGenre;
+    const isDynamicGutenberg =
+      book.id.startsWith('gutenberg-search-') || book.id.startsWith('gutenberg-');
     const matchesSource =
       activeSource === 'all'
         ? true
         : activeSource === 'curated'
-        ? book.source === 'gutenberg' && !book.id.startsWith('gutenberg-search-')
+        ? book.source === 'gutenberg' && !isDynamicGutenberg
         : activeSource === 'gutenberg'
         ? book.source === 'gutenberg'
         : activeSource === 'wikipedia'
@@ -361,7 +363,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             const isRemovable =
               book.source === 'custom' ||
               book.source === 'wikipedia' ||
-              book.id.startsWith('gutenberg-search-');
+              book.id.startsWith('gutenberg-search-') ||
+              book.id.startsWith('gutenberg-');
             const hasProgress = (book.currentChunkIndex || 0) > 0;
 
             return (

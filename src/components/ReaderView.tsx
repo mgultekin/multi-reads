@@ -30,6 +30,8 @@ interface ReaderViewProps {
   onAwardXP: (xpAmount: number) => void;
   nativeLang: string;
   onChangeNativeLang: (lang: string) => void;
+  readerFontSize?: 'sm' | 'md' | 'lg';
+  onChangeFontSize?: (size: 'sm' | 'md' | 'lg') => void;
 }
 
 export const ReaderView: React.FC<ReaderViewProps> = ({
@@ -41,6 +43,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   onAwardXP,
   nativeLang,
   onChangeNativeLang,
+  readerFontSize,
+  onChangeFontSize,
 }) => {
   const [currentLevel, setCurrentLevel] = useState<CEFRLevel>('Original');
   const [chunkIndex, setChunkIndex] = useState(0);
@@ -54,8 +58,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [isQuizOpen, setIsQuizOpen] = useState(false);
   const [isBilingualMode, setIsBilingualMode] = useState(false);
   const [fontSize, setFontSize] = useState<'sm' | 'md' | 'lg'>(() => {
-    return storageService.getUserProfile().readerFontSize || 'md';
+    return readerFontSize || storageService.getUserProfile().readerFontSize || 'md';
   });
+
+  useEffect(() => {
+    if (readerFontSize && readerFontSize !== fontSize) {
+      setFontSize(readerFontSize);
+    }
+  }, [readerFontSize]);
   // Trigger re-render when background sentence batch prefetch finishes for bilingual parallel mode
   const [, setBilingualTick] = useState(0);
   // Track words whose translations have been pre-warmed by hover prefetching before user click
@@ -216,6 +226,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     setFontSize(nextSize);
     const profile = storageService.getUserProfile();
     storageService.saveUserProfile({ ...profile, readerFontSize: nextSize });
+    if (onChangeFontSize) {
+      onChangeFontSize(nextSize);
+    }
   };
 
   // 55ms Hover Intent Prefetcher: detects mouse hover / focus on words and begins translation sequence before click
@@ -629,7 +642,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
         {/* Manual Re-Fetch Full Text Button if book is still a single short placeholder */}
         {!isFetchingGutenberg &&
-          currentBook.id.startsWith('gutenberg-search-') &&
+          (currentBook.id.startsWith('gutenberg-search-') || currentBook.id.startsWith('gutenberg-')) &&
           currentBook.chunks.length === 1 && (
             <div className="mb-6 flex justify-center">
               <button

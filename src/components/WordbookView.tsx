@@ -189,6 +189,31 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const handleExportAnkiTSV = () => {
+    if (cards.length === 0) return;
+    const cleanTab = (val: string | number | undefined) =>
+      String(val ?? '').replace(/[\t\r\n]+/g, ' ').trim();
+    const rows = cards.map((c) =>
+      [
+        cleanTab(c.word),
+        cleanTab(`${c.translation} (${c.partOfSpeech} · root: ${c.lemma})`),
+        cleanTab(c.contextSentence),
+        cleanTab(c.sentenceTranslation),
+        cleanTab(`foliolingo ${targetLang} ${c.genre || 'literature'}`),
+      ].join('\t')
+    );
+    const tsvContent = ['#separator:tab\n#html:false', ...rows].join('\n');
+    const blob = new Blob([tsvContent], { type: 'text/tab-separated-values;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `foliolingo-anki-${targetLang}.tsv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto px-6 py-20 text-center">
@@ -324,11 +349,20 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
 
           <button
             onClick={handleExportCSV}
-            title="Export deck to CSV / Anki"
+            title="Export deck to CSV"
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-700 dark:text-stone-300 hover:border-amber-600 transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-amber-700" />
             Export CSV
+          </button>
+
+          <button
+            onClick={handleExportAnkiTSV}
+            title="Export deck to Anki TSV format"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-700 dark:text-stone-300 hover:border-amber-600 transition-colors cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-amber-700" />
+            Anki TSV
           </button>
         </div>
       </div>

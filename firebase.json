@@ -1,0 +1,8 @@
+{
+  "firestore": {
+    "databaseId": "ai-studio-foliolingominima-d9eea879-07fb-4576-bc34-5f279408301c",
+    "rules": "firestore.rules",
+    "edition": "ENTERPRISE",
+    "dataAccessMode": "FIRESTORE_NATIVE"
+  }
+}

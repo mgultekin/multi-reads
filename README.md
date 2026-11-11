@@ -160,8 +160,8 @@ FolioLingo solves this through an **interactive parallel reading canvas** powere
 
 ### 1. Clone & Install Dependencies
 ```bash
-git clone https://github.com/<your-username>/foliolingo.git
-cd foliolingo
+git clone https://github.com/mgultekin/multi-reads.git
+cd multi-reads
 npm install
 ```
 
@@ -197,8 +197,8 @@ npm start
 - [x] Interactive chapter comprehension quizzes.
 - [x] **Proactive Section Batch Pre-fetching & 80ms Hover Intent Cache (`v0.4.0`)**.
 - [x] **Resilient Server-Side Multi-Provider Backup Translator (`v0.4.0`)**.
-- [x] **Product Owner Audit, 12 Formal Use Cases, Bilingual Parallel Reader, SRS Queue & CSV Export, and Firestore Reading Logs (`v0.5.0`)**.
-- [ ] **Offline Heuristic Dictionary**: Bundled SQLite/IndexedDB dictionary for full offline lemmatization.
+- [x] **Product Owner Audit, 12 Formal Use Cases, Bilingual Parallel Reader, SRS Queue & CSV/Anki Export, and Firestore Reading Logs (`v0.5.0`)**.
+- [x] **Offline Heuristic Dictionary**: Bundled IndexedDB dictionary (`offline_dictionary`) & rule-based morphological lemmatizer across ES, FR, DE, IT, TR, and EN (`v0.6.0`).
 
 ---
 

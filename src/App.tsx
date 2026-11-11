@@ -179,6 +179,12 @@ export default function App() {
             onAwardXP={handleAwardXP}
             nativeLang={profile.nativeLanguage}
             onChangeNativeLang={handleNativeLangChange}
+            readerFontSize={profile.readerFontSize}
+            onChangeFontSize={(size) => {
+              const updated: UserProfile = { ...profile, readerFontSize: size };
+              setProfile(updated);
+              storageService.saveUserProfile(updated);
+            }}
           />
         )}
 

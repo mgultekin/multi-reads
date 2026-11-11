@@ -1,4 +1,51 @@
 rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users/{userId}
+// Fields:
+//   - id: string (required, <= 128 chars)
+//   - name: string (required, <= 100 chars)
+//   - streakDays: number (required, >= 0)
+//   - totalWordsRead: number (required, >= 0)
+//   - xp: number (required, >= 0)
+//   - email: string (optional, <= 200 chars)
+//   - avatar: string (optional, <= 500 chars)
+//   - targetLanguage: string (optional, <= 10 chars)
+//   - nativeLanguage: string (optional, <= 50 chars)
+//   - leagueTier: string (optional, <= 30 chars)
+//   - updatedAt: string (optional, <= 100 chars)
+//
+// Subcollection: users/{userId}/wordbook/{wordId}
+// Fields:
+//   - id: string (required, <= 128 chars)
+//   - userId: string (required, matches userId)
+//   - word: string (required, 1..100 chars)
+//   - translation: string (required, <= 500 chars)
+//   - language: string (required, <= 10 chars)
+//   - contextSentence: string (optional, <= 2000 chars)
+//   - lemma: string (optional, <= 100 chars)
+//   - partOfSpeech: string (optional, <= 100 chars)
+//   - morphology: string (optional, <= 200 chars)
+//   - sentenceTranslation: string (optional, <= 2000 chars)
+//   - genre: string (optional, <= 50 chars)
+//   - bookTitle: string (optional, <= 200 chars)
+//   - createdAt: number (optional)
+//   - masteryLevel: number (optional, 0..5)
+//
+// Subcollection: users/{userId}/reading_logs/{logId}
+// Fields:
+//   - id: string (required, <= 128 chars)
+//   - userId: string (required, matches userId)
+//   - wordsCount: number (required, >= 0)
+//   - timestamp: string (<= 100 chars) or number (required)
+//   - bookId: string (optional, <= 128 chars)
+//   - bookTitle: string (optional, <= 200 chars)
+//   - language: string (optional, <= 10 chars)
+// ===============================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -31,7 +78,7 @@ service cloud.firestore {
              (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 500)) &&
              (!('targetLanguage' in data) || (data.targetLanguage is string && data.targetLanguage.size() <= 10)) &&
              (!('nativeLanguage' in data) || (data.nativeLanguage is string && data.nativeLanguage.size() <= 50)) &&
-             (!('leagueTier' in data) || (data.leagueTier is string && data.leagueTier.size() <= 50)) &&
+             (!('leagueTier' in data) || (data.leagueTier is string && data.leagueTier.size() <= 30)) &&
              (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 100));
     }
 
@@ -49,7 +96,7 @@ service cloud.firestore {
              (!('sentenceTranslation' in data) || (data.sentenceTranslation is string && data.sentenceTranslation.size() <= 2000)) &&
              (!('genre' in data) || (data.genre is string && data.genre.size() <= 50)) &&
              (!('bookTitle' in data) || (data.bookTitle is string && data.bookTitle.size() <= 200)) &&
-             (!('createdAt' in data) || (data.createdAt is number || (data.createdAt is string && data.createdAt.size() <= 100))) &&
+             (!('createdAt' in data) || data.createdAt is number) &&
              (!('masteryLevel' in data) || (data.masteryLevel is number && data.masteryLevel >= 0 && data.masteryLevel <= 5));
     }
 
