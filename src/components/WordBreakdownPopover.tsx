@@ -34,6 +34,17 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
     setSavedLocally(isAlreadySaved);
   }, [breakdown?.word, isAlreadySaved]);
 
+  useEffect(() => {
+    if (!breakdown && !isLoading) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [breakdown, isLoading, onClose]);
+
   if (!breakdown && !isLoading) return null;
 
   const handlePlayAudio = (textToSpeak: string) => {
@@ -65,9 +76,10 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
 
   return (
     <div
-      className="fixed inset-x-4 bottom-4 md:inset-auto md:bottom-8 md:right-8 z-50 md:w-96 bg-white dark:bg-[#1A1816] rounded-xl border border-stone-200 dark:border-stone-800 shadow-2xl p-5 text-stone-900 dark:text-stone-100 transition-all animate-in fade-in slide-in-from-bottom-3"
+      className="fixed inset-x-4 bottom-4 md:inset-auto md:bottom-8 md:right-8 max-sm:!fixed max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!w-full max-sm:!max-w-none max-sm:!rounded-b-none max-sm:!rounded-t-2xl z-50 md:w-96 bg-white dark:bg-[#1A1816] rounded-xl border border-stone-200 dark:border-stone-800 shadow-2xl p-5 text-stone-900 dark:text-stone-100 transition-all animate-in fade-in slide-in-from-bottom-3"
       role="dialog"
       aria-modal="true"
+      aria-label="Word Breakdown"
     >
       {/* Header bar */}
       <div className="flex items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-stone-800/80">

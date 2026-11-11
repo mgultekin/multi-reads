@@ -81,24 +81,31 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
     window.speechSynthesis.speak(utterance);
   };
 
-  const handleScoreCard = async (mastered: boolean) => {
+  const handleScoreCard = async (grade: boolean | 'hard' | 'good' | 'easy') => {
     if (!currentCard) return;
+
+    const isPositive = grade === true || grade === 'good' || grade === 'easy';
+    const isEasy = grade === 'easy';
+    const masteryDelta = isEasy ? 2 : isPositive ? 1 : -1;
+    const nextIntervalMs = isEasy
+      ? 1000 * 60 * 60 * 24 * 5
+      : isPositive
+      ? 1000 * 60 * 60 * 24 * 3
+      : 1000 * 60 * 60 * 6;
 
     const updated: Flashcard = {
       ...currentCard,
       reviewCount: (currentCard.reviewCount || 0) + 1,
-      masteryLevel: mastered
-        ? Math.min(5, (currentCard.masteryLevel || 0) + 1)
-        : Math.max(0, (currentCard.masteryLevel || 0) - 1),
-      nextReviewAt: Date.now() + (mastered ? 1000 * 60 * 60 * 24 * 3 : 1000 * 60 * 60 * 6),
+      masteryLevel: Math.min(5, Math.max(0, (currentCard.masteryLevel || 0) + masteryDelta)),
+      nextReviewAt: Date.now() + nextIntervalMs,
     };
 
     await storageService.saveFlashcard(updated);
     // Immediately synchronize in-memory React state so Mastery Level updates live
     setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
 
-    if (mastered) {
-      onAwardXP(10);
+    if (isPositive) {
+      onAwardXP(isEasy ? 15 : 10);
     }
 
     setIsFlipped(false);
@@ -112,6 +119,30 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
       setCurrentIndex(0);
     }
   };
+
+  // Keyboard shortcuts for 3D Flip Deck (1/2/3 to grade Hard/Good/Easy when flipped)
+  useEffect(() => {
+    if (practiceMode !== 'flip' || !currentCard) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+
+      if (isFlipped) {
+        if (e.key === '1') {
+          e.preventDefault();
+          handleScoreCard('hard');
+        } else if (e.key === '2') {
+          e.preventDefault();
+          handleScoreCard('good');
+        } else if (e.key === '3') {
+          e.preventDefault();
+          handleScoreCard('easy');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [practiceMode, currentCard, isFlipped, safeIndex, filteredDeck.length]);
 
   // Strip diacritics for forgiving comparison when user types without accents
   const stripAccents = (str: string) =>
@@ -425,8 +456,18 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
 
               {/* 3D Flip Card Container */}
               <div
+                role="button"
+                tabIndex={0}
+                aria-pressed={isFlipped}
+                aria-label={`Flashcard for ${currentCard.word}. Press Enter or Space to flip.`}
                 onClick={() => setIsFlipped(!isFlipped)}
-                className="w-full min-h-[320px] bg-white dark:bg-[#1C1A18] rounded-2xl border border-stone-200/90 dark:border-stone-800/90 shadow-sm p-8 cursor-pointer flex flex-col justify-between hover:border-amber-600/50 transition-all select-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setIsFlipped((prev) => !prev);
+                  }
+                }}
+                className="w-full min-h-[320px] bg-white dark:bg-[#1C1A18] rounded-2xl border border-stone-200/90 dark:border-stone-800/90 shadow-sm p-8 cursor-pointer flex flex-col justify-between hover:border-amber-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 transition-all select-none"
               >
                 {!isFlipped ? (
                   /* FRONT OF CARD */
@@ -530,6 +571,7 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
               <div className="flex items-center justify-between gap-4 mt-6">
                 <button
                   onClick={() => handleScoreCard(false)}
+                  title="Shortcut: Press 1 when flipped (Hard / Needs Practice)"
                   className="flex-1 py-3 px-4 rounded-xl border border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-900 text-xs font-semibold text-stone-700 dark:text-stone-300 transition-colors cursor-pointer"
                 >
                   Needs Practice (+0 XP)
@@ -537,12 +579,16 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
 
                 <button
                   onClick={() => handleScoreCard(true)}
+                  title="Shortcut: Press 2 (Good) or 3 (Easy) when flipped"
                   className="flex-1 py-3 px-4 rounded-xl bg-amber-700 hover:bg-amber-800 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <Check className="w-4 h-4" />
                   Mastered (+10 XP)
                 </button>
               </div>
+              <p className="mt-2.5 text-center text-[11px] font-mono text-stone-400 dark:text-stone-500">
+                Keyboard: Enter/Space to flip · When flipped: [1] Hard · [2] Good (+10 XP) · [3] Easy (+15 XP)
+              </p>
             </div>
           )}
 

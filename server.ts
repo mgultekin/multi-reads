@@ -57,15 +57,33 @@ function resolveIsoCode(lang: string, fallback = 'en'): string {
   return LANG_ISO_MAP[key] || key.slice(0, 2) || fallback;
 }
 
-// High-speed Server-Side LRU Caches
+// High-speed Server-Side True LRU Caches
 const serverBreakdownCache = new Map<string, any>();
 const serverSentenceCache = new Map<string, string>();
+const serverAdaptationCache = new Map<string, any>();
 const MAX_SERVER_CACHE = 2000;
+const MAX_ADAPTATION_CACHE = 300;
 
-function setServerCache<T>(map: Map<string, T>, key: string, value: T) {
-  if (map.size >= MAX_SERVER_CACHE) {
+function getServerCache<T>(map: Map<string, T>, key: string): T | undefined {
+  if (!map.has(key)) return undefined;
+  const value = map.get(key)!;
+  // Refresh key order in Map (move to newest / MRU position)
+  map.delete(key);
+  map.set(key, value);
+  return value;
+}
+
+function setServerCache<T>(
+  map: Map<string, T>,
+  key: string,
+  value: T,
+  maxEntries: number = MAX_SERVER_CACHE
+) {
+  if (map.has(key)) {
+    map.delete(key);
+  } else if (map.size >= maxEntries) {
     const oldestKey = map.keys().next().value;
-    if (oldestKey) map.delete(oldestKey);
+    if (oldestKey !== undefined) map.delete(oldestKey);
   }
   map.set(key, value);
 }
@@ -298,20 +316,25 @@ app.post('/api/gemini/breakdown', async (req: Request, res: Response): Promise<v
 
     const cleanWord = String(word).trim();
     const cleanSentence = String(sentence).trim();
-    const cacheKey = `${cleanWord.toLowerCase()}__${targetLang}__${baseLang}__${cleanSentence.slice(0, 64)}`;
+    const wordOnlyKey = `${cleanWord.toLowerCase()}__${targetLang}__${baseLang}`;
+    const cacheKey = `${wordOnlyKey}__${cleanSentence.slice(0, 64)}`;
 
-    // 1. Check Server LRU Cache (<1ms)
-    if (serverBreakdownCache.has(cacheKey) && !req.body.forceAi) {
-      const cached = serverBreakdownCache.get(cacheKey);
-      res.json({
-        success: true,
-        breakdown: {
-          ...cached,
-          latencyMs: Date.now() - startTime,
-          sourceEngine: 'cache',
-        },
-      });
-      return;
+    // 1. Check Server True LRU Cache (<1ms) and refresh MRU order on hit
+    if (!req.body.forceAi) {
+      const cached =
+        getServerCache(serverBreakdownCache, cacheKey) ||
+        getServerCache(serverBreakdownCache, wordOnlyKey);
+      if (cached) {
+        res.json({
+          success: true,
+          breakdown: {
+            ...cached,
+            latencyMs: Date.now() - startTime,
+            sourceEngine: 'cache',
+          },
+        });
+        return;
+      }
     }
 
     // Start backup translation in parallel so we have an instant safety net and accurate fallback
@@ -327,6 +350,7 @@ app.post('/api/gemini/breakdown', async (req: Request, res: Response): Promise<v
         sourceEngine: preferFastDict ? ('prefetch' as const) : ('backup-translator' as const),
       };
       setServerCache(serverBreakdownCache, cacheKey, payload);
+      setServerCache(serverBreakdownCache, wordOnlyKey, payload);
       res.json({ success: true, breakdown: payload });
       return;
     }
@@ -386,6 +410,7 @@ Return JSON with contextual meaning of "${cleanWord}" in ${baseLang}, dictionary
       };
 
       setServerCache(serverBreakdownCache, cacheKey, finalBreakdown);
+      setServerCache(serverBreakdownCache, wordOnlyKey, finalBreakdown);
       res.json({ success: true, breakdown: finalBreakdown });
       return;
     } catch (geminiErr: any) {
@@ -397,6 +422,7 @@ Return JSON with contextual meaning of "${cleanWord}" in ${baseLang}, dictionary
         sourceEngine: 'backup-translator' as const,
       };
       setServerCache(serverBreakdownCache, cacheKey, fallbackPayload);
+      setServerCache(serverBreakdownCache, wordOnlyKey, fallbackPayload);
       res.json({ success: true, breakdown: fallbackPayload });
       return;
     }
@@ -431,13 +457,14 @@ app.post('/api/gemini/batch-prefetch', async (req: Request, res: Response): Prom
       .filter((w: any) => w && w.word)
       .slice(0, 28);
 
-    // 1. Translate all sentences in parallel using server cache + fast translation pipeline
+    // 1. Translate all sentences in parallel using server LRU cache + fast translation pipeline
     const sentenceTranslations: Record<string, string> = {};
     await Promise.all(
       uniqueSentences.map(async (sent) => {
         const sKey = `${sourceIso}__${targetIso}__${sent}`;
-        if (serverSentenceCache.has(sKey)) {
-          sentenceTranslations[sent] = serverSentenceCache.get(sKey)!;
+        const cachedSent = getServerCache(serverSentenceCache, sKey);
+        if (cachedSent) {
+          sentenceTranslations[sent] = cachedSent;
           return;
         }
         const resTrans = await translateTextBackup(sent, sourceIso, targetIso);
@@ -447,7 +474,7 @@ app.post('/api/gemini/batch-prefetch', async (req: Request, res: Response): Prom
       })
     );
 
-    // 2. Pre-build dictionary breakdowns for the section's top vocabulary in parallel
+    // 2. Pre-build dictionary breakdowns for the section's top vocabulary in parallel (checking serverBreakdownCache first)
     const wordBreakdowns: Record<string, any> = {};
     await Promise.all(
       uniqueWords.map(async ({ word, sentence }) => {
@@ -456,12 +483,32 @@ app.post('/api/gemini/batch-prefetch', async (req: Request, res: Response): Prom
         if (!cleanW) return;
 
         const wKey = cleanW.toLowerCase();
-        const wordRes = await translateTextBackup(cleanW, sourceIso, targetIso);
-        const heur = inferMorphology(cleanW, sourceIso);
+        const wordOnlyCacheKey = `${wKey}__${targetLang}__${baseLang}`;
+        const fullCacheKey = `${wordOnlyCacheKey}__${cleanS.slice(0, 64)}`;
+
         const sentTrans =
           sentenceTranslations[cleanS] ||
-          serverSentenceCache.get(`${sourceIso}__${targetIso}__${cleanS}`) ||
+          getServerCache(serverSentenceCache, `${sourceIso}__${targetIso}__${cleanS}`) ||
           cleanS;
+
+        // Check serverBreakdownCache before making an outbound translation call
+        const cachedBreakdown =
+          getServerCache(serverBreakdownCache, fullCacheKey) ||
+          getServerCache(serverBreakdownCache, wordOnlyCacheKey);
+        if (cachedBreakdown) {
+          wordBreakdowns[wKey] = {
+            ...cachedBreakdown,
+            sentenceTranslation:
+              cachedBreakdown.sentenceTranslation && cachedBreakdown.sentenceTranslation !== cleanS
+                ? cachedBreakdown.sentenceTranslation
+                : sentTrans,
+            sourceEngine: 'cache',
+          };
+          return;
+        }
+
+        const wordRes = await translateTextBackup(cleanW, sourceIso, targetIso);
+        const heur = inferMorphology(cleanW, sourceIso);
 
         const item = {
           word: cleanW,
@@ -476,6 +523,8 @@ app.post('/api/gemini/batch-prefetch', async (req: Request, res: Response): Prom
               : `Pre-cached contextual meaning in ${baseLang}.`,
           sourceEngine: 'prefetch',
         };
+        setServerCache(serverBreakdownCache, fullCacheKey, item);
+        setServerCache(serverBreakdownCache, wordOnlyCacheKey, item);
         wordBreakdowns[wKey] = item;
       })
     );
@@ -595,11 +644,21 @@ app.post('/api/gemini/adapt-cefr', async (req: Request, res: Response): Promise<
       return;
     }
 
+    const cleanText = String(text).trim();
+    const adaptCacheKey = `cefr__${targetLang}__${level}__${cleanText.slice(0, 240)}__${cleanText.length}`;
+    const cachedAdapted = getServerCache(serverAdaptationCache, adaptCacheKey);
+    if (cachedAdapted && typeof cachedAdapted === 'string') {
+      res.json({ success: true, adaptedText: cachedAdapted, level, cached: true });
+      return;
+    }
+
     const ai = getGeminiClient(customApiKey);
     if (!ai) {
+      const fallbackText = buildFallbackCefrAdaptation(cleanText, level);
+      setServerCache(serverAdaptationCache, adaptCacheKey, fallbackText, MAX_ADAPTATION_CACHE);
       res.json({
         success: true,
-        adaptedText: buildFallbackCefrAdaptation(text, level),
+        adaptedText: fallbackText,
         level,
       });
       return;
@@ -616,7 +675,7 @@ CEFR Level Guidelines for ${level}:
 - C1: Sophisticated phrasing, flexible style, nuanced literary cohesion.
 
 Source Text:
-${text}`;
+${cleanText}`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
@@ -629,13 +688,20 @@ Return pure adapted text in clean paragraphs.`,
       },
     });
 
-    const adapted = response.text || buildFallbackCefrAdaptation(text, level);
-    res.json({ success: true, adaptedText: adapted.trim(), level });
+    const adapted = (response.text || buildFallbackCefrAdaptation(cleanText, level)).trim();
+    setServerCache(serverAdaptationCache, adaptCacheKey, adapted, MAX_ADAPTATION_CACHE);
+    res.json({ success: true, adaptedText: adapted, level });
   } catch (error: any) {
-    const { text = '', level = 'B1' } = req.body || {};
+    const { text = '', targetLang = 'Spanish', level = 'B1' } = req.body || {};
+    const cleanText = String(text).trim();
+    const fallbackText = buildFallbackCefrAdaptation(cleanText, String(level));
+    if (cleanText) {
+      const adaptCacheKey = `cefr__${targetLang}__${level}__${cleanText.slice(0, 240)}__${cleanText.length}`;
+      setServerCache(serverAdaptationCache, adaptCacheKey, fallbackText, MAX_ADAPTATION_CACHE);
+    }
     res.json({
       success: true,
-      adaptedText: buildFallbackCefrAdaptation(String(text), String(level)),
+      adaptedText: fallbackText,
       level,
     });
   }
@@ -651,15 +717,24 @@ app.post('/api/gemini/quiz', async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    const cleanChunk = String(textChunk).trim();
+    const quizCacheKey = `quiz__${targetLang}__${baseLang}__${cleanChunk.slice(0, 240)}__${cleanChunk.length}`;
+    const cachedQuiz = getServerCache(serverAdaptationCache, quizCacheKey);
+    if (cachedQuiz) {
+      res.json({ success: true, quiz: cachedQuiz, cached: true });
+      return;
+    }
+
     const ai = getGeminiClient(customApiKey);
     if (!ai) {
-      const quiz = await buildFallbackQuiz(String(textChunk), String(targetLang), String(baseLang));
+      const quiz = await buildFallbackQuiz(cleanChunk, String(targetLang), String(baseLang));
+      setServerCache(serverAdaptationCache, quizCacheKey, quiz, MAX_ADAPTATION_CACHE);
       res.json({ success: true, quiz });
       return;
     }
 
     const prompt = `Generate a 3-question reading comprehension and vocabulary quiz based on this text excerpt:
-"${textChunk.slice(0, 2000)}"
+"${cleanChunk.slice(0, 2000)}"
 
 Target language of text: ${targetLang}
 User's preferred base language: ${baseLang}
@@ -712,10 +787,16 @@ Return strictly valid JSON adhering to the schema.`,
 
     const jsonText = response.text || '{}';
     const parsed = JSON.parse(jsonText);
+    setServerCache(serverAdaptationCache, quizCacheKey, parsed, MAX_ADAPTATION_CACHE);
     res.json({ success: true, quiz: parsed });
   } catch (error: any) {
     const { textChunk = '', targetLang = 'Spanish', baseLang = 'English' } = req.body || {};
-    const quiz = await buildFallbackQuiz(String(textChunk), String(targetLang), String(baseLang));
+    const cleanChunk = String(textChunk).trim();
+    const quiz = await buildFallbackQuiz(cleanChunk, String(targetLang), String(baseLang));
+    if (cleanChunk) {
+      const quizCacheKey = `quiz__${targetLang}__${baseLang}__${cleanChunk.slice(0, 240)}__${cleanChunk.length}`;
+      setServerCache(serverAdaptationCache, quizCacheKey, quiz, MAX_ADAPTATION_CACHE);
+    }
     res.json({ success: true, quiz });
   }
 });

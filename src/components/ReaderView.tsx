@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -70,6 +70,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [, setBilingualTick] = useState(0);
   // Track words whose translations have been pre-warmed by hover prefetching before user click
   const [prefetchedPreviews, setPrefetchedPreviews] = useState<Record<string, string>>({});
+  // Guard to ensure each section's word count is only recorded once per completion
+  const [completedSectionKeys, setCompletedSectionKeys] = useState<Record<string, boolean>>({});
 
   const containerRef = useRef<HTMLDivElement>(null);
   const hoverTimerRef = useRef<number | null>(null);
@@ -204,20 +206,41 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   const handleNextChunk = () => {
     if (!currentBook || chunkIndex >= currentBook.chunks.length - 1) return;
+    const sectionKey = `${currentBook.id}__${chunkIndex}`;
     const newIdx = chunkIndex + 1;
     setChunkIndex(newIdx);
     loadChunkContent(currentBook, newIdx, currentLevel);
     persistSectionProgress(currentBook, newIdx);
 
-    // Record actual words read for this section + create ReadingLogEntry
-    const chunkWords = (displayText || '').split(/\s+/).filter(Boolean).length;
-    onRecordWords(chunkWords, {
-      bookId: currentBook.id,
-      bookTitle: currentBook.title,
-      language: currentBook.language,
-    });
+    // Record actual words read for this section + create ReadingLogEntry (guarded once per section)
+    if (!completedSectionKeys[sectionKey]) {
+      const chunkWords = (displayText || '').split(/\s+/).filter(Boolean).length;
+      onRecordWords(chunkWords, {
+        bookId: currentBook.id,
+        bookTitle: currentBook.title,
+        language: currentBook.language,
+      });
+      setCompletedSectionKeys((prev) => ({ ...prev, [sectionKey]: true }));
+    }
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCompleteFinalSection = () => {
+    if (!currentBook) return;
+    const sectionKey = `${currentBook.id}__${chunkIndex}`;
+    if (!completedSectionKeys[sectionKey]) {
+      const chunkWords = (displayText || '').split(/\s+/).filter(Boolean).length;
+      onRecordWords(chunkWords, {
+        bookId: currentBook.id,
+        bookTitle: currentBook.title,
+        language: currentBook.language,
+      });
+      setCompletedSectionKeys((prev) => ({ ...prev, [sectionKey]: true }));
+      setIsQuizOpen(true);
+    } else {
+      onOpenLibrary();
+    }
   };
 
   const handleFontSizeCycle = () => {
@@ -398,6 +421,37 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     onAwardXP(10); // +10 XP bonus for saving new vocabulary (without inflating wordsReadToday)
   };
 
+  // Memoize paragraph, sentence, and word tokenization so hover state updates do not re-split ~600 words
+  const tokenizedParagraphs = useMemo(() => {
+    if (!displayText) return [];
+    return displayText
+      .split(/\n\s*\n/)
+      .map((para) => para.trim())
+      .filter(Boolean)
+      .map((trimmed) => {
+        const sentences = trimmed.match(/[^.!?]+[.!?]+|\S+/g) || [trimmed];
+        return {
+          rawSentences: sentences,
+          sentences: sentences.map((sentence) => {
+            const tokens = sentence.split(/(\s+|[«"'(]+|[»"')!?,.:;]+)/);
+            return {
+              sentence,
+              tokens: tokens.map((token) => {
+                const isWord = /[\p{L}]/u.test(token);
+                const cleanToken = isWord ? geminiClient.normalizeWord(token) : '';
+                return {
+                  token,
+                  isWord,
+                  cleanToken,
+                  normalizedToken: cleanToken.toLowerCase(),
+                };
+              }),
+            };
+          }),
+        };
+      });
+  }, [displayText]);
+
   if (!currentBook) {
     return (
       <div className="max-w-4xl mx-auto px-6 py-24 text-center">
@@ -429,19 +483,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       ? 'text-xl lg:text-[1.35rem] leading-[1.95]'
       : 'text-lg lg:text-[1.18rem] leading-[1.85]';
 
-  // Render paragraphs and tokenize words into clickable spans + optional Bilingual Parallel line
-  const renderInteractiveText = (text: string) => {
-    const paragraphs = text.split(/\n\s*\n/);
-
-    return paragraphs.map((para, pIdx) => {
-      const trimmed = para.trim();
-      if (!trimmed) return null;
-
-      const sentences = trimmed.match(/[^.!?]+[.!?]+|\S+/g) || [trimmed];
-
+  // Render memoized paragraphs and tokenized word spans + optional Bilingual Parallel line
+  const renderInteractiveText = () => {
+    return tokenizedParagraphs.map((paraObj, pIdx) => {
       // Build parallel translation for paragraph if Bilingual Mode is active
       const parallelSentences = isBilingualMode
-        ? sentences
+        ? paraObj.rawSentences
             .map((s) => geminiClient.getCachedSentenceTranslation(s.trim(), nativeLang))
             .filter(Boolean)
             .join(' ')
@@ -456,46 +503,47 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 : ''
             }`}
           >
-            {sentences.map((sentence, sIdx) => {
-              const tokens = sentence.split(/(\s+|[«"'(]+|[»"')!?,.:;]+)/);
+            {paraObj.sentences.map(({ sentence, tokens }, sIdx) => (
+              <span key={`s-${pIdx}-${sIdx}`} className="inline">
+                {tokens.map(({ token, isWord, cleanToken, normalizedToken }, tIdx) => {
+                  if (!isWord) {
+                    return <span key={`t-${tIdx}`}>{token}</span>;
+                  }
 
-              return (
-                <span key={`s-${pIdx}-${sIdx}`} className="inline">
-                  {tokens.map((token, tIdx) => {
-                    const isWord = /[\p{L}]/u.test(token);
-                    const normalizedToken = isWord ? geminiClient.normalizeWord(token).toLowerCase() : '';
-                    const isSaved = isWord && savedWordsMap[normalizedToken];
-                    const readyPreview = isWord ? prefetchedPreviews[normalizedToken] : undefined;
+                  const isSaved = savedWordsMap[normalizedToken];
+                  const readyPreview = prefetchedPreviews[normalizedToken];
 
-                    if (!isWord) {
-                      return <span key={`t-${tIdx}`}>{token}</span>;
-                    }
-
-                    return (
-                      <span
-                        key={`t-${tIdx}`}
-                        tabIndex={0}
-                        data-prefetched={readyPreview ? 'true' : undefined}
-                        title={readyPreview ? `${geminiClient.normalizeWord(token)} → ${readyPreview}` : undefined}
-                        onMouseEnter={() => handleWordHoverStart(token, sentence)}
-                        onMouseLeave={handleWordHoverEnd}
-                        onFocus={() => handleWordHoverStart(token, sentence)}
-                        onBlur={handleWordHoverEnd}
-                        onTouchStart={() => handleWordHoverStart(token, sentence)}
-                        onClick={() => handleWordClick(token, sentence)}
-                        className={`cursor-pointer rounded px-0.5 transition-colors select-text hover:bg-amber-200/70 dark:hover:bg-amber-900/40 hover:text-amber-950 dark:hover:text-amber-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-600 ${
-                          isSaved
-                            ? 'border-b border-amber-600/60 dark:border-amber-400/60 text-amber-900 dark:text-amber-200 font-medium'
-                            : ''
-                        }`}
-                      >
-                        {token}
-                      </span>
-                    );
-                  })}
-                </span>
-              );
-            })}
+                  return (
+                    <span
+                      key={`t-${tIdx}`}
+                      role="button"
+                      tabIndex={0}
+                      data-prefetched={readyPreview ? 'true' : undefined}
+                      title={readyPreview ? `${cleanToken} → ${readyPreview}` : undefined}
+                      onMouseEnter={() => handleWordHoverStart(token, sentence)}
+                      onMouseLeave={handleWordHoverEnd}
+                      onFocus={() => handleWordHoverStart(token, sentence)}
+                      onBlur={handleWordHoverEnd}
+                      onTouchStart={() => handleWordHoverStart(token, sentence)}
+                      onClick={() => handleWordClick(token, sentence)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleWordClick(token, sentence);
+                        }
+                      }}
+                      className={`cursor-pointer rounded px-0.5 transition-colors select-text hover:bg-amber-200/70 dark:hover:bg-amber-900/40 hover:text-amber-950 dark:hover:text-amber-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-600 ${
+                        isSaved
+                          ? 'border-b border-amber-600/60 dark:border-amber-400/60 text-amber-900 dark:text-amber-200 font-medium'
+                          : ''
+                      }`}
+                    >
+                      {token}
+                    </span>
+                  );
+                })}
+              </span>
+            ))}
           </p>
 
           {isBilingualMode && (
@@ -511,7 +559,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   return (
     <div className="min-h-screen pb-32">
       {/* Top Sticky Reading Utility Ribbon */}
-      <div className="sticky top-[57px] z-30 w-full border-b border-[#E7E2D7]/80 dark:border-[#2C2926]/80 bg-[#FBF9F5]/95 dark:bg-[#141312]/95 backdrop-blur-md">
+      <div className="sticky top-[98px] lg:top-[57px] z-30 w-full border-b border-[#E7E2D7]/80 dark:border-[#2C2926]/80 bg-[#FBF9F5]/95 dark:bg-[#141312]/95 backdrop-blur-md">
         <div className="max-w-4xl mx-auto px-6 py-2.5 flex flex-wrap items-center justify-between gap-4">
           {/* Left: Book Meta & Back */}
           <div className="flex items-center gap-3">
@@ -667,7 +715,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
         {/* Chapter Prose */}
         <article className="relative">
-          {renderInteractiveText(displayText)}
+          {renderInteractiveText()}
         </article>
 
         {/* Interactive Section Mastery & Comprehension Quiz Callout */}
@@ -708,14 +756,22 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             {progressPercent}% Complete
           </div>
 
-          <button
-            onClick={handleNextChunk}
-            disabled={chunkIndex >= totalChunks - 1}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-lg bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 hover:bg-stone-800 dark:hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-          >
-            Next Section
-            <ChevronRight className="w-4 h-4" />
-          </button>
+          {chunkIndex >= totalChunks - 1 ? (
+            <button
+              onClick={handleCompleteFinalSection}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-lg bg-amber-700 hover:bg-amber-800 text-white transition-colors cursor-pointer"
+            >
+              Complete Section ✓
+            </button>
+          ) : (
+            <button
+              onClick={handleNextChunk}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-lg bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 hover:bg-stone-800 dark:hover:bg-white transition-colors cursor-pointer"
+            >
+              Next Section
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
         </footer>
       </main>
 

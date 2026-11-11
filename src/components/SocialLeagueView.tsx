@@ -60,7 +60,7 @@ export const SocialLeagueView: React.FC<SocialLeagueViewProps> = ({
   };
 
   const weeklyTarget = Math.max(1000, (profile.dailyWordGoal || 500) * 7);
-  const currentWeeklyProgress = profile.wordsReadThisWeek || profile.wordsReadToday + 1200;
+  const currentWeeklyProgress = profile.wordsReadThisWeek || profile.wordsReadToday || 0;
   const weeklyPercent = Math.min(100, Math.round((currentWeeklyProgress / weeklyTarget) * 100));
 
   const dailyGoal = profile.dailyWordGoal || 500;
