@@ -17,6 +17,7 @@ interface NavbarProps {
   toggleTheme: () => void;
   openSettings: () => void;
   currentUser: User | null;
+  isFirebaseConfigured?: boolean;
   onSignInWithGoogle: () => void;
   onSignOut: () => void;
 }
@@ -34,6 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   toggleTheme,
   openSettings,
   currentUser,
+  isFirebaseConfigured = true,
   onSignInWithGoogle,
   onSignOut,
 }) => {
@@ -166,7 +168,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Google Auth / Profile Button */}
-          {currentUser ? (
+          {!isFirebaseConfigured ? (
+            <span
+              title="Running 100% locally in IndexedDB & localStorage. Add your own firebase-applet-config.json to enable Google Cloud Sync."
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-[11px] font-mono text-stone-600 dark:text-stone-400"
+            >
+              Local Sync
+            </span>
+          ) : currentUser ? (
             <div className="flex items-center gap-1.5 bg-stone-100 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-1 pr-2">
               {currentUser.photoURL ? (
                 <img

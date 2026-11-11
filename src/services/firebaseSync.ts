@@ -52,6 +52,8 @@ class FirebaseSyncService {
    * (eliminates the 121x login write-amplification loop and stays strictly within $0 Free Tier)
    */
   private async syncUnsyncedLocalData(userId: string) {
+    const firestore = db;
+    if (!firestore) return;
     try {
       const cards = await storageService.getFlashcards();
       const logs = storageService.getReadingLogs();
@@ -71,12 +73,12 @@ class FirebaseSyncService {
         return;
       }
 
-      const batch = writeBatch(db);
+      const batch = writeBatch(firestore);
       let batchCount = 0;
 
       for (const card of unsyncedCards.slice(0, 200)) {
         const cleanId = card.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
-        batch.set(doc(db, 'users', userId, 'wordbook', cleanId), {
+        batch.set(doc(firestore, 'users', userId, 'wordbook', cleanId), {
           id: cleanId,
           userId,
           word: String(card.word || 'word').slice(0, 100),
@@ -98,7 +100,7 @@ class FirebaseSyncService {
 
       for (const log of unsyncedLogs.slice(0, 100)) {
         const cleanId = log.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
-        batch.set(doc(db, 'users', userId, 'reading_logs', cleanId), {
+        batch.set(doc(firestore, 'users', userId, 'reading_logs', cleanId), {
           id: cleanId,
           userId,
           wordsCount: Math.max(1, Math.min(100000, Math.round(Number(log.wordsCount) || 1))),
@@ -128,7 +130,9 @@ class FirebaseSyncService {
    */
   async syncUserOnLogin(user: User): Promise<UserProfile> {
     const localProfile = storageService.getUserProfile();
-    const userDocRef = doc(db, 'users', user.uid);
+    const firestore = db;
+    if (!firestore) return localProfile;
+    const userDocRef = doc(firestore, 'users', user.uid);
     const path = `users/${user.uid}`;
 
     try {
@@ -212,12 +216,13 @@ class FirebaseSyncService {
    * Save flashcard to Firestore subcollection /users/{uid}/wordbook
    */
   async saveCloudFlashcard(userId: string, card: Flashcard): Promise<void> {
-    if (!costTelemetry.canPerformFirestoreWrite(1)) return;
+    const firestore = db;
+    if (!firestore || !costTelemetry.canPerformFirestoreWrite(1)) return;
     const cleanId = card.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
     const path = `users/${userId}/wordbook/${cleanId}`;
 
     try {
-      await setDoc(doc(db, 'users', userId, 'wordbook', cleanId), {
+      await setDoc(doc(firestore, 'users', userId, 'wordbook', cleanId), {
         id: cleanId,
         userId,
         word: String(card.word || 'word').slice(0, 100),
@@ -244,11 +249,13 @@ class FirebaseSyncService {
    * Delete flashcard from Firestore
    */
   async deleteCloudFlashcard(userId: string, cardId: string): Promise<void> {
+    const firestore = db;
+    if (!firestore) return;
     const cleanId = cardId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
     const path = `users/${userId}/wordbook/${cleanId}`;
 
     try {
-      await deleteDoc(doc(db, 'users', userId, 'wordbook', cleanId));
+      await deleteDoc(doc(firestore, 'users', userId, 'wordbook', cleanId));
       costTelemetry.recordFirestoreDelete(1);
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, path);
@@ -259,12 +266,13 @@ class FirebaseSyncService {
    * Save reading session log to Firestore subcollection /users/{uid}/reading_logs
    */
   async saveCloudReadingLog(userId: string, log: ReadingLogEntry): Promise<void> {
-    if (!costTelemetry.canPerformFirestoreWrite(1)) return;
+    const firestore = db;
+    if (!firestore || !costTelemetry.canPerformFirestoreWrite(1)) return;
     const cleanId = log.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
     const path = `users/${userId}/reading_logs/${cleanId}`;
 
     try {
-      await setDoc(doc(db, 'users', userId, 'reading_logs', cleanId), {
+      await setDoc(doc(firestore, 'users', userId, 'reading_logs', cleanId), {
         id: cleanId,
         userId,
         wordsCount: Math.max(1, Math.min(100000, Math.round(Number(log.wordsCount) || 1))),
@@ -286,11 +294,12 @@ class FirebaseSyncService {
    * Sync reading progress to Firestore
    */
   async syncReadingProgress(userId: string, profile: UserProfile): Promise<void> {
-    if (!costTelemetry.canPerformFirestoreWrite(1)) return;
+    const firestore = db;
+    if (!firestore || !costTelemetry.canPerformFirestoreWrite(1)) return;
     const path = `users/${userId}`;
     try {
       await setDoc(
-        doc(db, 'users', userId),
+        doc(firestore, 'users', userId),
         {
           id: userId,
           name: String(profile.name || 'Scholar').slice(0, 100),
@@ -312,6 +321,8 @@ class FirebaseSyncService {
    * Listen for real-time cloud updates
    */
   private startListeners(userId: string) {
+    const firestore = db;
+    if (!firestore) return;
     this.stopListeners();
 
     storageService.setCloudSyncHandler({
@@ -329,7 +340,7 @@ class FirebaseSyncService {
     // Wordbook real-time listener
     const wordbookPath = `users/${userId}/wordbook`;
     this.unsubscribeWordbook = onSnapshot(
-      collection(db, 'users', userId, 'wordbook'),
+      collection(firestore, 'users', userId, 'wordbook'),
       (snapshot) => {
         const changes = snapshot.docChanges();
         if (changes.length > 0) {
@@ -354,7 +365,7 @@ class FirebaseSyncService {
     // Reading logs real-time listener
     const readingLogsPath = `users/${userId}/reading_logs`;
     this.unsubscribeReadingLogs = onSnapshot(
-      collection(db, 'users', userId, 'reading_logs'),
+      collection(firestore, 'users', userId, 'reading_logs'),
       (snapshot) => {
         const changes = snapshot.docChanges();
         if (changes.length > 0) {

@@ -10,7 +10,7 @@ import { SettingsModal } from './components/SettingsModal.tsx';
 import { ContentItem, LanguageCode, UserProfile } from './types/index.ts';
 import { storageService } from './services/storageService.ts';
 import { socialService } from './services/socialService.ts';
-import { auth, googleProvider } from './lib/firebase.ts';
+import { auth, googleProvider, isFirebaseConfigured } from './lib/firebase.ts';
 import { firebaseSyncService } from './services/firebaseSync.ts';
 
 export default function App() {
@@ -34,6 +34,10 @@ export default function App() {
 
   // Listen to Firebase Auth state
   useEffect(() => {
+    if (!isFirebaseConfigured || !auth) {
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
@@ -123,6 +127,9 @@ export default function App() {
   };
 
   const handleSignInWithGoogle = async () => {
+    if (!isFirebaseConfigured || !auth || !googleProvider) {
+      return;
+    }
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
@@ -131,6 +138,9 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
+    if (!isFirebaseConfigured || !auth) {
+      return;
+    }
     try {
       await signOut(auth);
       setCurrentUser(null);
@@ -155,6 +165,7 @@ export default function App() {
         toggleTheme={handleToggleTheme}
         openSettings={() => setIsSettingsOpen(true)}
         currentUser={currentUser}
+        isFirebaseConfigured={isFirebaseConfigured}
         onSignInWithGoogle={handleSignInWithGoogle}
         onSignOut={handleSignOut}
       />

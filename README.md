@@ -204,7 +204,7 @@ cd multi-reads
 npm install
 ```
 
-### 2. Configure Environment Variables
+### 2. Configure Environment Variables (and Optional Firebase Sync)
 Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
@@ -214,6 +214,8 @@ Populate your `.env` file (optional if using in-app BYOK or Zero-AI Dictionary M
 GEMINI_API_KEY=your_free_tier_gemini_api_key_here
 PORT=3000
 ```
+
+- **Optional Firebase Cloud Sync:** By default, FolioLingo runs 100% locally in your browser (IndexedDB + `localStorage`) with **no Firebase project required**. To enable cross-device Google Sign-In and Firestore sync on your own Firebase project, copy `firebase-applet-config.example.json` to `firebase-applet-config.json` (gitignored) with your own project keys or supply `VITE_FIREBASE_*` environment variables, and deploy `firestore.rules`.
 
 ### 3. Start Development Server
 ```bash
