@@ -1,0 +1,73 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --bg-paper: #FBF9F5;
+    --bg-card: #FFFFFF;
+    --text-ink: #1C1917;
+    --text-muted: #78716C;
+    --border-paper: #E7E2D7;
+    --accent-amber: #B45309;
+  }
+
+  .dark {
+    --bg-paper: #141312;
+    --bg-card: #1D1B19;
+    --text-ink: #F5F2EB;
+    --text-muted: #A8A29E;
+    --border-paper: #2C2926;
+    --accent-amber: #F59E0B;
+  }
+
+  body {
+    background-color: var(--bg-paper);
+    color: var(--text-ink);
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  }
+}
+
+.font-reader {
+  font-family: 'Source Serif 4', Georgia, Cambria, 'Times New Roman', Times, serif;
+}
+
+.font-display {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+/* Custom subtle scrollbar for reader and cards */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(180, 160, 140, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(180, 160, 140, 0.5);
+}
+
+/* 3D Flip Flashcard Support */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.transform-style-preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}

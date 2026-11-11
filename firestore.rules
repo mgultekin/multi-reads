@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Helper Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Validation Blueprint for UserProfile
+    function isValidUserProfile(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 100 &&
+             data.streakDays is number && data.streakDays >= 0 &&
+             data.totalWordsRead is number && data.totalWordsRead >= 0 &&
+             data.xp is number && data.xp >= 0 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 200)) &&
+             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 500)) &&
+             (!('targetLanguage' in data) || (data.targetLanguage is string && data.targetLanguage.size() <= 10)) &&
+             (!('nativeLanguage' in data) || (data.nativeLanguage is string && data.nativeLanguage.size() <= 50));
+    }
+
+    // Validation Blueprint for WordbookItem
+    function isValidWordbookItem(data, userId) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.userId == userId &&
+             data.word is string && data.word.size() > 0 && data.word.size() <= 100 &&
+             data.translation is string && data.translation.size() <= 500 &&
+             data.language is string && data.language.size() <= 10 &&
+             (!('contextSentence' in data) || (data.contextSentence is string && data.contextSentence.size() <= 2000)) &&
+             (!('lemma' in data) || (data.lemma is string && data.lemma.size() <= 100)) &&
+             (!('partOfSpeech' in data) || (data.partOfSpeech is string && data.partOfSpeech.size() <= 100)) &&
+             (!('morphology' in data) || (data.morphology is string && data.morphology.size() <= 200)) &&
+             (!('sentenceTranslation' in data) || (data.sentenceTranslation is string && data.sentenceTranslation.size() <= 2000)) &&
+             (!('masteryLevel' in data) || (data.masteryLevel is number && data.masteryLevel >= 0 && data.masteryLevel <= 5));
+    }
+
+    // Validation Blueprint for ReadingLog
+    function isValidReadingLog(data, userId) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.userId == userId &&
+             data.wordsCount is number && data.wordsCount >= 0 &&
+             data.timestamp is number &&
+             (!('bookId' in data) || (data.bookId is string && data.bookId.size() <= 128)) &&
+             (!('bookTitle' in data) || (data.bookTitle is string && data.bookTitle.size() <= 200)) &&
+             (!('language' in data) || (data.language is string && data.language.size() <= 10));
+    }
+
+    // Connection test document
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false; // PII protection: prevent scraping all user documents
+      allow create: if isOwner(userId) && isValidId(userId) &&
+                       isValidUserProfile(request.resource.data) &&
+                       request.resource.data.id == userId;
+      allow update: if isOwner(userId) && isValidId(userId) &&
+                       isValidUserProfile(request.resource.data) &&
+                       request.resource.data.id == userId;
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Subcollection: Wordbook Flashcards
+      match /wordbook/{wordId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(wordId);
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(wordId) &&
+                         isValidWordbookItem(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(wordId) &&
+                         isValidWordbookItem(request.resource.data, userId);
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(wordId);
+      }
+
+      // Subcollection: Reading History Logs
+      match /reading_logs/{logId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(logId);
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(logId) &&
+                         isValidReadingLog(request.resource.data, userId);
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(logId);
+      }
+    }
+  }
+}

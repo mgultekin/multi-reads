@@ -1,0 +1,74 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with language learning stats, streaks, and preferences",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 200 },
+        "avatar": { "type": "string", "maxLength": 500 },
+        "streakDays": { "type": "number" },
+        "totalWordsRead": { "type": "number" },
+        "xp": { "type": "number" },
+        "leagueTier": { "type": "string", "enum": ["Bronze", "Silver", "Gold", "Sapphire", "Diamond"] },
+        "targetLanguage": { "type": "string", "maxLength": 10 },
+        "nativeLanguage": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "streakDays", "totalWordsRead", "xp"]
+    },
+    "WordbookItem": {
+      "title": "WordbookItem",
+      "description": "Saved vocabulary flashcard item belonging to a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "word": { "type": "string", "maxLength": 100 },
+        "contextSentence": { "type": "string", "maxLength": 2000 },
+        "translation": { "type": "string", "maxLength": 500 },
+        "lemma": { "type": "string", "maxLength": 100 },
+        "partOfSpeech": { "type": "string", "maxLength": 100 },
+        "morphology": { "type": "string", "maxLength": 200 },
+        "sentenceTranslation": { "type": "string", "maxLength": 2000 },
+        "language": { "type": "string", "maxLength": 10 },
+        "genre": { "type": "string", "maxLength": 50 },
+        "bookTitle": { "type": "string", "maxLength": 200 },
+        "masteryLevel": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "word", "translation", "language"]
+    },
+    "ReadingLog": {
+      "title": "ReadingLog",
+      "description": "Log entry recording words read during a session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "bookId": { "type": "string", "maxLength": 128 },
+        "bookTitle": { "type": "string", "maxLength": 200 },
+        "wordsCount": { "type": "number" },
+        "language": { "type": "string", "maxLength": 10 },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "userId", "wordsCount", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile and learning statistics"
+    },
+    "/users/{userId}/wordbook/{wordId}": {
+      "schema": { "$ref": "#/entities/WordbookItem" },
+      "description": "User's saved vocabulary flashcards"
+    },
+    "/users/{userId}/reading_logs/{logId}": {
+      "schema": { "$ref": "#/entities/ReadingLog" },
+      "description": "User's reading history logs"
+    }
+  }
+}

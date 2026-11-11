@@ -1,0 +1,6 @@
+{
+  "name": "FolioLingo - Minimalist Reader & Language Learning",
+  "description": "An open-source, zero-cost language learning platform combining context-aware reading and grammar breakdown with minimalist habit tracking and open literature.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
