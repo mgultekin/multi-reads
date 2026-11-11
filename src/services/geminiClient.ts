@@ -129,28 +129,47 @@ class GeminiClientService {
   }
 
   /**
-   * Hover Intent Prefetch (triggered after 80ms pointer dwell on a word)
+   * Hover Intent Prefetch (triggered on word hover/focus).
+   * Resolves via Local Lexicon first (0ms) or lightweight Fast Dictionary (<120ms, 0 Gemini quota),
+   * and returns the resolved WordBreakdown so ReaderView knows the data is ready before click.
    */
-  public prefetchWord(
+  public async prefetchWord(
     word: string,
     sentence: string,
     targetLangName: string,
-    baseLangName: string
-  ): void {
+    baseLangName: string,
+    targetLangCode?: string
+  ): Promise<WordBreakdown | null> {
     const cleanWord = this.normalizeWord(word);
-    if (!cleanWord || cleanWord.length <= 1) return;
+    if (!cleanWord || cleanWord.length <= 1) return null;
 
     const cacheKey = this.buildWordCacheKey(cleanWord, targetLangName, baseLangName);
-    if (this.sessionWordCache.has(cacheKey) || this.inFlightRequests.has(cacheKey)) {
-      return;
+    if (this.sessionWordCache.has(cacheKey)) {
+      return this.sessionWordCache.get(cacheKey)!;
+    }
+    if (this.inFlightRequests.has(cacheKey)) {
+      return this.inFlightRequests.get(cacheKey)!;
     }
 
-    // Fire and track in inFlightRequests so an immediate click reuses this exact promise
-    const promise = this.fetchWordFromServer(cleanWord, sentence, targetLangName, baseLangName, cacheKey);
-    this.inFlightRequests.set(cacheKey, promise);
-    promise.finally(() => {
-      this.inFlightRequests.delete(cacheKey);
+    // Tier 0: Check Local Dictionary first so we don't make a network request if covered locally
+    const langCode = targetLangCode || targetLangName.toLowerCase().slice(0, 2);
+    const cachedSentence = this.sentenceCache.get(this.buildSentenceCacheKey(sentence, baseLangName));
+    const localHit = lookupInstantWord(cleanWord, langCode, baseLangName, sentence, cachedSentence);
+    if (localHit && cachedSentence) {
+      this.sessionWordCache.set(cacheKey, localHit);
+      return localHit;
+    }
+
+    // Tier 1: Lightweight dictionary hover prefetch (preferFastDict = true reduces Gemini API dependency)
+    const promise = this.fetchWordFromServer(cleanWord, sentence, targetLangName, baseLangName, cacheKey, {
+      preferFastDict: true,
     });
+    this.inFlightRequests.set(cacheKey, promise);
+    try {
+      return await promise;
+    } finally {
+      this.inFlightRequests.delete(cacheKey);
+    }
   }
 
   /**
@@ -250,24 +269,29 @@ class GeminiClientService {
 
   /**
    * Request context-aware breakdown for clicked word.
-   * Supports progressive enrichment via optional `onEnrich` callback.
+   * Uses Hybrid Strategy:
+   * 1. L1 Session / Prefetch Cache (0ms, 0 API calls)
+   * 2. In-flight Hover Prefetch reuse
+   * 3. Local Dictionary + Stemmer fallback (0ms, 0 Gemini calls when sentence is cached)
+   * 4. Server hybrid lookup (Gemini Flash-Lite + fast backup dictionary fallback)
    */
   async getWordBreakdown(
     word: string,
     sentence: string,
     targetLangName: string,
     baseLangName: string = 'English',
-    onEnrich?: (enriched: WordBreakdown) => void
+    onEnrich?: (enriched: WordBreakdown) => void,
+    targetLangCode?: string
   ): Promise<WordBreakdown> {
     const cleanWord = this.normalizeWord(word);
     const cacheKey = this.buildWordCacheKey(cleanWord, targetLangName, baseLangName);
     const sKey = this.buildSentenceCacheKey(sentence, baseLangName);
     const cachedSentence = this.sentenceCache.get(sKey);
 
-    // 1. Check L1 Session Cache (0ms latency)
+    // 1. Check L1 Session / Hover-Prefetch Cache (0ms latency, 0 Gemini API calls)
     if (this.sessionWordCache.has(cacheKey)) {
       const cached = this.sessionWordCache.get(cacheKey)!;
-      const resolved: WordBreakdown = {
+      return {
         ...cached,
         contextSentence: sentence,
         sentenceTranslation:
@@ -275,42 +299,41 @@ class GeminiClientService {
             ? cached.sentenceTranslation
             : cachedSentence || cached.sentenceTranslation,
         latencyMs: 0,
-        sourceEngine: cached.sourceEngine === 'prefetch' ? 'prefetch' : 'cache',
+        sourceEngine: cached.sourceEngine === 'prefetch' ? 'prefetch' : cached.sourceEngine || 'cache',
         isEnriching: false,
       };
-
-      // If this entry came from fast batch prefetch, enrich deep morphology in background
-      if (cached.sourceEngine === 'prefetch' && onEnrich) {
-        this.fetchWordFromServer(cleanWord, sentence, targetLangName, baseLangName, cacheKey)
-          .then((deepResult) => {
-            onEnrich({ ...deepResult, isEnriching: false });
-          })
-          .catch(() => {});
-      }
-
-      return resolved;
     }
 
-    // 2. Check if a hover prefetch is already in flight for this exact word!
+    // 2. Reuse in-flight hover prefetch promise if currently resolving
     if (this.inFlightRequests.has(cacheKey)) {
       return this.inFlightRequests.get(cacheKey)!;
     }
 
-    // 3. Check Instant Lexicon (<1ms) and fire progressive enrichment
-    const langCode = targetLangName.toLowerCase().slice(0, 2);
+    // 3. Check Instant Local Dictionary (<1ms) to avoid unnecessary Gemini calls
+    const langCode = targetLangCode || targetLangName.toLowerCase().slice(0, 2);
     const instantHit = lookupInstantWord(cleanWord, langCode, baseLangName, sentence, cachedSentence);
     if (instantHit) {
-      this.fetchWordFromServer(cleanWord, sentence, targetLangName, baseLangName, cacheKey)
-        .then((deepResult) => {
-          if (onEnrich) {
-            onEnrich({ ...deepResult, isEnriching: false });
-          }
+      this.sessionWordCache.set(cacheKey, instantHit);
+      // Only fetch sentence translation via fast dictionary if sentence wasn't cached yet
+      if (!cachedSentence && onEnrich) {
+        this.fetchWordFromServer(cleanWord, sentence, targetLangName, baseLangName, cacheKey, {
+          preferFastDict: true,
         })
-        .catch(() => {});
+          .then((dictRes) => {
+            const merged: WordBreakdown = {
+              ...instantHit,
+              sentenceTranslation: dictRes.sentenceTranslation || instantHit.sentenceTranslation,
+              isEnriching: false,
+            };
+            this.sessionWordCache.set(cacheKey, merged);
+            onEnrich(merged);
+          })
+          .catch(() => {});
+      }
       return instantHit;
     }
 
-    // 4. Perform live ultra-fast lookup (`gemini-3.1-flash-lite` + server backup fallback)
+    // 4. Perform live lookup (Gemini Flash-Lite + server dictionary fallback)
     const requestPromise = this.fetchWordFromServer(
       cleanWord,
       sentence,
@@ -326,12 +349,30 @@ class GeminiClientService {
     }
   }
 
+  /**
+   * Explicit on-demand Deep AI Analysis when user requests full Gemini philological breakdown
+   */
+  async enrichWithDeepAi(
+    word: string,
+    sentence: string,
+    targetLangName: string,
+    baseLangName: string = 'English'
+  ): Promise<WordBreakdown> {
+    const cleanWord = this.normalizeWord(word);
+    const cacheKey = this.buildWordCacheKey(cleanWord, targetLangName, baseLangName);
+    return this.fetchWordFromServer(cleanWord, sentence, targetLangName, baseLangName, cacheKey, {
+      preferFastDict: false,
+      forceAi: true,
+    });
+  }
+
   private async fetchWordFromServer(
     cleanWord: string,
     sentence: string,
     targetLangName: string,
     baseLangName: string,
-    cacheKey: string
+    cacheKey: string,
+    options?: { preferFastDict?: boolean; forceAi?: boolean }
   ): Promise<WordBreakdown> {
     const startTime = performance.now();
 
@@ -344,6 +385,8 @@ class GeminiClientService {
           sentence: sentence.trim(),
           targetLang: targetLangName,
           baseLang: baseLangName,
+          preferFastDict: Boolean(options?.preferFastDict),
+          forceAi: Boolean(options?.forceAi),
         }),
       });
 

@@ -12,6 +12,7 @@ interface WordBreakdownPopoverProps {
   speechLocale: string;
   nativeLang: string;
   onChangeNativeLang?: (langName: string) => void;
+  onRequestDeepAi?: () => void;
 }
 
 export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
@@ -23,6 +24,7 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
   speechLocale,
   nativeLang,
   onChangeNativeLang,
+  onRequestDeepAi,
 }) => {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [savedLocally, setSavedLocally] = useState(isAlreadySaved);
@@ -52,6 +54,15 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
     setSavedLocally(true);
   };
 
+  const engineLabel =
+    breakdown?.sourceEngine === 'lexicon'
+      ? 'Local Lexicon'
+      : breakdown?.sourceEngine === 'prefetch'
+      ? 'Hover Prefetch'
+      : breakdown?.sourceEngine === 'gemini-flash-lite'
+      ? 'Gemini AI'
+      : 'Hybrid Cache';
+
   return (
     <div
       className="fixed inset-x-4 bottom-4 md:inset-auto md:bottom-8 md:right-8 z-50 md:w-96 bg-white dark:bg-[#1A1816] rounded-xl border border-stone-200 dark:border-stone-800 shadow-2xl p-5 text-stone-900 dark:text-stone-100 transition-all animate-in fade-in slide-in-from-bottom-3"
@@ -62,12 +73,12 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
       <div className="flex items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-stone-800/80">
         <div className="flex items-center gap-1.5 text-xs text-amber-800 dark:text-amber-400 font-medium">
           <Sparkles className="w-3.5 h-3.5" />
-          <span>Folio Engine</span>
+          <span>{engineLabel}</span>
           {breakdown && typeof breakdown.latencyMs === 'number' && !isLoading && (
             <>
               <span aria-hidden="true" className="text-stone-300 dark:text-stone-700">·</span>
               <span className="font-mono text-[11px] tabular-nums text-stone-400 dark:text-stone-500">
-                {breakdown.latencyMs === 0 ? 'Instant (0ms)' : `${breakdown.latencyMs}ms`}
+                {breakdown.latencyMs === 0 ? '0ms' : `${breakdown.latencyMs}ms`}
               </span>
             </>
           )}
@@ -169,7 +180,7 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
             </button>
 
             {isGrammarExpanded && (
-              <div className="mt-2 p-3 bg-stone-50/70 dark:bg-stone-900/40 rounded-lg border border-stone-100 dark:border-stone-800 text-xs space-y-1.5 animate-in fade-in duration-150">
+              <div className="mt-2 p-3 bg-stone-50/70 dark:bg-stone-900/40 rounded-lg border border-stone-100 dark:border-stone-800 text-xs space-y-2 animate-in fade-in duration-150">
                 <div className="flex items-start gap-1.5 text-stone-600 dark:text-stone-400">
                   <span className="font-semibold text-stone-800 dark:text-stone-200 shrink-0">Role:</span>
                   <span>
@@ -179,9 +190,30 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
                 </div>
 
                 {breakdown.usageNote && (
-                  <p className="text-stone-500 dark:text-stone-400 italic text-[11px] leading-relaxed pt-1">
+                  <p className="text-stone-500 dark:text-stone-400 italic text-[11px] leading-relaxed">
                     {breakdown.usageNote}
                   </p>
+                )}
+
+                {onRequestDeepAi && breakdown.sourceEngine !== 'gemini-flash-lite' && (
+                  <button
+                    type="button"
+                    onClick={onRequestDeepAi}
+                    disabled={breakdown.isEnriching}
+                    className="flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-400 hover:underline pt-1 cursor-pointer disabled:opacity-50"
+                  >
+                    {breakdown.isEnriching ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Running Deep AI Grammar Analysis...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3" />
+                        <span>Run Deep AI Grammar & IPA Analysis</span>
+                      </>
+                    )}
+                  </button>
                 )}
               </div>
             )}

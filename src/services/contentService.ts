@@ -177,17 +177,32 @@ class ContentService {
   }
 
   /**
-   * Create custom imported book/article from user input
+   * Create custom imported book/article from user input or parsed EPUB chapters
    */
   createCustomArticle(
     title: string,
     author: string,
     language: LanguageCode,
     genre: GenreId,
-    rawText: string
+    rawText: string,
+    preParsedChapters?: { title: string; content: string }[]
   ): ContentItem {
-    const chunks = this.chunkText(rawText.trim(), 600);
-    const words = rawText.trim().split(/\s+/).length;
+    let chunks: string[] = [];
+
+    if (preParsedChapters && preParsedChapters.length > 0) {
+      for (const ch of preParsedChapters) {
+        const subChunks = this.chunkText(ch.content.trim(), 550);
+        subChunks.forEach((sc, idx) => {
+          const header =
+            subChunks.length > 1 ? `${ch.title} (Part ${idx + 1}/${subChunks.length})` : ch.title;
+          chunks.push(`${header}\n\n${sc}`);
+        });
+      }
+    } else {
+      chunks = this.chunkText(rawText.trim(), 600);
+    }
+
+    const words = rawText.trim().split(/\s+/).filter(Boolean).length;
 
     return {
       id: `custom-${Date.now()}`,

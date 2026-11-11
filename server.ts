@@ -275,11 +275,18 @@ async function buildBackupBreakdown(
   };
 }
 
-// 1. Ultra-Fast Context-Aware Word & Grammar Breakdown (Folio Engine v0.4.0)
+// 1. Ultra-Fast Context-Aware Word & Grammar Breakdown (Folio Engine Hybrid Strategy)
 app.post('/api/gemini/breakdown', async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
   try {
-    const { word, sentence, targetLang = 'Spanish', baseLang = 'English', customApiKey } = req.body;
+    const {
+      word,
+      sentence,
+      targetLang = 'Spanish',
+      baseLang = 'English',
+      customApiKey,
+      preferFastDict = false,
+    } = req.body;
 
     if (!word || !sentence) {
       res.status(400).json({ error: 'Both "word" and "sentence" are required.' });
@@ -291,7 +298,7 @@ app.post('/api/gemini/breakdown', async (req: Request, res: Response): Promise<v
     const cacheKey = `${cleanWord.toLowerCase()}__${targetLang}__${baseLang}__${cleanSentence.slice(0, 64)}`;
 
     // 1. Check Server LRU Cache (<1ms)
-    if (serverBreakdownCache.has(cacheKey)) {
+    if (serverBreakdownCache.has(cacheKey) && !req.body.forceAi) {
       const cached = serverBreakdownCache.get(cacheKey);
       res.json({
         success: true,
@@ -307,10 +314,15 @@ app.post('/api/gemini/breakdown', async (req: Request, res: Response): Promise<v
     // Start backup translation in parallel so we have an instant safety net and accurate fallback
     const backupPromise = buildBackupBreakdown(cleanWord, cleanSentence, targetLang, baseLang);
 
-    const ai = getGeminiClient(customApiKey);
+    // When preferFastDict is true (e.g. hover prefetch), resolve via fast dictionary without consuming Gemini API quota
+    const ai = preferFastDict ? null : getGeminiClient(customApiKey);
     if (!ai) {
       const backup = await backupPromise;
-      const payload = { ...backup, latencyMs: Date.now() - startTime };
+      const payload = {
+        ...backup,
+        latencyMs: Date.now() - startTime,
+        sourceEngine: preferFastDict ? ('prefetch' as const) : ('backup-translator' as const),
+      };
       setServerCache(serverBreakdownCache, cacheKey, payload);
       res.json({ success: true, breakdown: payload });
       return;
@@ -477,6 +489,94 @@ app.post('/api/gemini/batch-prefetch', async (req: Request, res: Response): Prom
   }
 });
 
+// Helper for heuristic CEFR sentence simplification when Gemini is unavailable
+function buildFallbackCefrAdaptation(text: string, level: string): string {
+  if (level === 'Original' || level === 'C1' || level === 'B2') {
+    return text;
+  }
+  // For A1/A2/B1, split long compound clauses at semicolons/colons into cleaner, shorter sentences
+  const paragraphs = text.split(/\n\s*\n/);
+  const simplified = paragraphs.map((para) => {
+    const cleaned = para
+      .replace(/;\s+/g, '. ')
+      .replace(/:\s+/g, '. ')
+      .replace(/\s+—\s+/g, ', ');
+    if (level === 'A1') {
+      const sentences = cleaned.match(/[^.!?]+[.!?]+|\S+/g) || [cleaned];
+      return sentences.slice(0, Math.max(2, Math.ceil(sentences.length * 0.75))).join(' ').trim();
+    }
+    return cleaned.trim();
+  });
+  return simplified.join('\n\n');
+}
+
+// Helper for dynamic vocabulary & comprehension quiz fallback using backup translator
+async function buildFallbackQuiz(textChunk: string, targetLang: string, baseLang: string) {
+  const sourceIso = resolveIsoCode(targetLang, 'es');
+  const targetIso = resolveIsoCode(baseLang, 'en');
+
+  const rawSentences = (textChunk.match(/[^.!?]+[.!?]+/g) || [textChunk])
+    .map((s) => s.trim())
+    .filter((s) => s.length > 15);
+  const firstSentence = rawSentences[0] || textChunk.slice(0, 140);
+
+  const words = textChunk
+    .split(/\s+/)
+    .map((w) => w.replace(/^[«"'(—¡¿]+|[»"')!?,.:;—]+$/g, '').trim())
+    .filter((w) => w.length >= 5);
+  const targetWord = words[0] || 'lectura';
+
+  const [sentTrans, wordTrans] = await Promise.all([
+    translateTextBackup(firstSentence, sourceIso, targetIso),
+    translateTextBackup(targetWord, sourceIso, targetIso),
+  ]);
+
+  return {
+    title: `Section Comprehension & Vocabulary Check (${targetLang})`,
+    questions: [
+      {
+        id: 'q1',
+        category: 'Comprehension',
+        question: `What is the primary meaning of the opening passage: "${firstSentence.slice(0, 90)}${firstSentence.length > 90 ? '...' : ''}"?`,
+        options: [
+          sentTrans.translation || 'It introduces the central scene and narrative focus of the passage.',
+          'It describes an unrelated modern technological invention.',
+          'It lists geographical coordinates for a naval voyage.',
+          'It concludes the final chapter without any characters.',
+        ],
+        correctIndex: 0,
+        explanation: `In ${baseLang}, this passage translates to: "${sentTrans.translation || firstSentence}".`,
+      },
+      {
+        id: 'q2',
+        category: 'Vocabulary',
+        question: `What does the word "${targetWord}" mean in the context of this ${targetLang} passage?`,
+        options: [
+          wordTrans.translation || targetWord,
+          'An ancient musical instrument',
+          'A mathematical theorem',
+          'A sudden weather phenomenon',
+        ],
+        correctIndex: 0,
+        explanation: `"${targetWord}" translates to "${wordTrans.translation || targetWord}" in ${baseLang}.`,
+      },
+      {
+        id: 'q3',
+        category: 'Nuance',
+        question: `How does this excerpt advance the narrative style of the work?`,
+        options: [
+          'Through authentic literary phrasing and contextual character observation',
+          'By using exclusively bulleted technical instructions',
+          'By omitting all verbs and descriptive adjectives',
+          'Through purely numerical data tables',
+        ],
+        correctIndex: 0,
+        explanation: 'Authentic literary texts build comprehension through cohesive narrative flow and expressive vocabulary.',
+      },
+    ],
+  };
+}
+
 // 2. Dynamic CEFR Level Adaptation
 app.post('/api/gemini/adapt-cefr', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -494,9 +594,10 @@ app.post('/api/gemini/adapt-cefr', async (req: Request, res: Response): Promise<
 
     const ai = getGeminiClient(customApiKey);
     if (!ai) {
-      res.status(400).json({
-        error: 'No Gemini API key available. Please configure GEMINI_API_KEY or provide your free key in Settings.',
-        code: 'MISSING_API_KEY'
+      res.json({
+        success: true,
+        adaptedText: buildFallbackCefrAdaptation(text, level),
+        level,
       });
       return;
     }
@@ -525,12 +626,14 @@ Return pure adapted text in clean paragraphs.`,
       },
     });
 
-    const adapted = response.text || text;
+    const adapted = response.text || buildFallbackCefrAdaptation(text, level);
     res.json({ success: true, adaptedText: adapted.trim(), level });
   } catch (error: any) {
-    console.error('Error in /api/gemini/adapt-cefr:', error);
-    res.status(500).json({
-      error: error.message || 'Failed to adapt text to CEFR level.',
+    const { text = '', level = 'B1' } = req.body || {};
+    res.json({
+      success: true,
+      adaptedText: buildFallbackCefrAdaptation(String(text), String(level)),
+      level,
     });
   }
 });
@@ -547,10 +650,8 @@ app.post('/api/gemini/quiz', async (req: Request, res: Response): Promise<void> 
 
     const ai = getGeminiClient(customApiKey);
     if (!ai) {
-      res.status(400).json({
-        error: 'No Gemini API key available.',
-        code: 'MISSING_API_KEY'
-      });
+      const quiz = await buildFallbackQuiz(String(textChunk), String(targetLang), String(baseLang));
+      res.json({ success: true, quiz });
       return;
     }
 
@@ -610,10 +711,9 @@ Return strictly valid JSON adhering to the schema.`,
     const parsed = JSON.parse(jsonText);
     res.json({ success: true, quiz: parsed });
   } catch (error: any) {
-    console.error('Error in /api/gemini/quiz:', error);
-    res.status(500).json({
-      error: error.message || 'Failed to generate comprehension quiz.',
-    });
+    const { textChunk = '', targetLang = 'Spanish', baseLang = 'English' } = req.body || {};
+    const quiz = await buildFallbackQuiz(String(textChunk), String(targetLang), String(baseLang));
+    res.json({ success: true, quiz });
   }
 });
 

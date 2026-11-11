@@ -52,7 +52,7 @@
         "bookTitle": { "type": "string", "maxLength": 200 },
         "wordsCount": { "type": "number" },
         "language": { "type": "string", "maxLength": 10 },
-        "timestamp": { "type": "number" }
+        "timestamp": { "type": ["string", "number"] }
       },
       "required": ["id", "userId", "wordsCount", "timestamp"]
     }

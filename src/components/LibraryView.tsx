@@ -159,7 +159,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             className="flex items-center gap-2 px-4 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-medium rounded-lg shadow-sm transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            Import Article or Book
+            Import EPUB / Book
           </button>
         </div>
       </div>

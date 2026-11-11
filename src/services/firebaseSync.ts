@@ -60,15 +60,15 @@ class FirebaseSyncService {
         storageService.saveUserProfile(merged);
         await setDoc(userDocRef, {
           id: user.uid,
-          name: merged.name,
-          email: user.email || '',
-          avatar: merged.avatar,
-          streakDays: merged.streakDays,
-          totalWordsRead: merged.totalWordsRead,
-          xp: merged.xp,
-          leagueTier: merged.leagueTier,
-          targetLanguage: merged.targetLanguage,
-          nativeLanguage: merged.nativeLanguage,
+          name: String(merged.name || 'Scholar').slice(0, 100),
+          email: String(user.email || '').slice(0, 200),
+          avatar: String(merged.avatar || '').slice(0, 500),
+          streakDays: Math.max(0, Number(merged.streakDays) || 0),
+          totalWordsRead: Math.max(0, Number(merged.totalWordsRead) || 0),
+          xp: Math.max(0, Number(merged.xp) || 0),
+          leagueTier: merged.leagueTier || 'Bronze',
+          targetLanguage: String(merged.targetLanguage || 'es').slice(0, 10),
+          nativeLanguage: String(merged.nativeLanguage || 'English').slice(0, 50),
           updatedAt: new Date().toISOString(),
         });
 
@@ -94,15 +94,15 @@ class FirebaseSyncService {
 
         await setDoc(userDocRef, {
           id: user.uid,
-          name: initialProfile.name,
-          email: user.email || '',
-          avatar: initialProfile.avatar,
-          streakDays: initialProfile.streakDays,
-          totalWordsRead: initialProfile.totalWordsRead,
-          xp: initialProfile.xp,
-          leagueTier: initialProfile.leagueTier,
-          targetLanguage: initialProfile.targetLanguage,
-          nativeLanguage: initialProfile.nativeLanguage,
+          name: String(initialProfile.name || 'Scholar').slice(0, 100),
+          email: String(user.email || '').slice(0, 200),
+          avatar: String(initialProfile.avatar || '').slice(0, 500),
+          streakDays: Math.max(0, Number(initialProfile.streakDays) || 0),
+          totalWordsRead: Math.max(0, Number(initialProfile.totalWordsRead) || 0),
+          xp: Math.max(0, Number(initialProfile.xp) || 0),
+          leagueTier: initialProfile.leagueTier || 'Bronze',
+          targetLanguage: String(initialProfile.targetLanguage || 'es').slice(0, 10),
+          nativeLanguage: String(initialProfile.nativeLanguage || 'English').slice(0, 50),
           updatedAt: new Date().toISOString(),
         });
 
@@ -128,25 +128,25 @@ class FirebaseSyncService {
    * Save flashcard to Firestore subcollection /users/{uid}/wordbook
    */
   async saveCloudFlashcard(userId: string, card: Flashcard): Promise<void> {
-    const cleanId = card.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanId = card.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
     const path = `users/${userId}/wordbook/${cleanId}`;
 
     try {
       await setDoc(doc(db, 'users', userId, 'wordbook', cleanId), {
         id: cleanId,
         userId,
-        word: card.word,
-        contextSentence: card.contextSentence || '',
-        translation: card.translation,
-        lemma: card.lemma || card.word,
-        partOfSpeech: card.partOfSpeech || 'Word',
-        morphology: card.morphology || '',
-        sentenceTranslation: card.sentenceTranslation || '',
-        language: card.language,
-        genre: card.genre || 'fiction',
-        bookTitle: card.bookTitle || '',
-        masteryLevel: card.masteryLevel || 0,
-        createdAt: card.createdAt || Date.now(),
+        word: String(card.word || 'word').slice(0, 100),
+        contextSentence: String(card.contextSentence || '').slice(0, 2000),
+        translation: String(card.translation || '').slice(0, 500),
+        lemma: String(card.lemma || card.word || '').slice(0, 100),
+        partOfSpeech: String(card.partOfSpeech || 'Word').slice(0, 100),
+        morphology: String(card.morphology || '').slice(0, 200),
+        sentenceTranslation: String(card.sentenceTranslation || '').slice(0, 2000),
+        language: String(card.language || 'es').slice(0, 10),
+        genre: String(card.genre || 'fiction').slice(0, 50),
+        bookTitle: String(card.bookTitle || '').slice(0, 200),
+        masteryLevel: Math.max(0, Math.min(5, Number(card.masteryLevel) || 0)),
+        createdAt: typeof card.createdAt === 'number' ? card.createdAt : Date.now(),
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, path);
@@ -157,7 +157,7 @@ class FirebaseSyncService {
    * Delete flashcard from Firestore
    */
   async deleteCloudFlashcard(userId: string, cardId: string): Promise<void> {
-    const cleanId = cardId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanId = cardId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
     const path = `users/${userId}/wordbook/${cleanId}`;
 
     try {
@@ -171,18 +171,20 @@ class FirebaseSyncService {
    * Save reading session log to Firestore subcollection /users/{uid}/reading_logs
    */
   async saveCloudReadingLog(userId: string, log: ReadingLogEntry): Promise<void> {
-    const cleanId = log.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanId = log.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
     const path = `users/${userId}/reading_logs/${cleanId}`;
 
     try {
       await setDoc(doc(db, 'users', userId, 'reading_logs', cleanId), {
         id: cleanId,
         userId,
-        wordsCount: Math.max(1, Math.min(100000, Math.round(log.wordsCount))),
-        timestamp: log.timestamp || new Date().toISOString(),
-        ...(log.bookId ? { bookId: log.bookId } : {}),
-        ...(log.bookTitle ? { bookTitle: log.bookTitle.slice(0, 200) } : {}),
-        ...(log.language ? { language: log.language } : {}),
+        wordsCount: Math.max(1, Math.min(100000, Math.round(Number(log.wordsCount) || 1))),
+        timestamp: typeof log.timestamp === 'string' && log.timestamp
+          ? log.timestamp.slice(0, 100)
+          : new Date().toISOString(),
+        ...(log.bookId ? { bookId: String(log.bookId).slice(0, 128) } : {}),
+        ...(log.bookTitle ? { bookTitle: String(log.bookTitle).slice(0, 200) } : {}),
+        ...(log.language ? { language: String(log.language).slice(0, 10) } : {}),
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, path);
@@ -198,10 +200,12 @@ class FirebaseSyncService {
       await setDoc(
         doc(db, 'users', userId),
         {
-          totalWordsRead: profile.totalWordsRead,
-          streakDays: profile.streakDays,
-          xp: profile.xp,
-          leagueTier: profile.leagueTier,
+          id: userId,
+          name: String(profile.name || 'Scholar').slice(0, 100),
+          totalWordsRead: Math.max(0, Number(profile.totalWordsRead) || 0),
+          streakDays: Math.max(0, Number(profile.streakDays) || 0),
+          xp: Math.max(0, Number(profile.xp) || 0),
+          leagueTier: profile.leagueTier || 'Bronze',
           updatedAt: new Date().toISOString(),
         },
         { merge: true }

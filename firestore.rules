@@ -30,7 +30,9 @@ service cloud.firestore {
              (!('email' in data) || (data.email is string && data.email.size() <= 200)) &&
              (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 500)) &&
              (!('targetLanguage' in data) || (data.targetLanguage is string && data.targetLanguage.size() <= 10)) &&
-             (!('nativeLanguage' in data) || (data.nativeLanguage is string && data.nativeLanguage.size() <= 50));
+             (!('nativeLanguage' in data) || (data.nativeLanguage is string && data.nativeLanguage.size() <= 50)) &&
+             (!('leagueTier' in data) || (data.leagueTier is string && data.leagueTier.size() <= 50)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 100));
     }
 
     // Validation Blueprint for WordbookItem
@@ -45,6 +47,9 @@ service cloud.firestore {
              (!('partOfSpeech' in data) || (data.partOfSpeech is string && data.partOfSpeech.size() <= 100)) &&
              (!('morphology' in data) || (data.morphology is string && data.morphology.size() <= 200)) &&
              (!('sentenceTranslation' in data) || (data.sentenceTranslation is string && data.sentenceTranslation.size() <= 2000)) &&
+             (!('genre' in data) || (data.genre is string && data.genre.size() <= 50)) &&
+             (!('bookTitle' in data) || (data.bookTitle is string && data.bookTitle.size() <= 200)) &&
+             (!('createdAt' in data) || (data.createdAt is number || (data.createdAt is string && data.createdAt.size() <= 100))) &&
              (!('masteryLevel' in data) || (data.masteryLevel is number && data.masteryLevel >= 0 && data.masteryLevel <= 5));
     }
 
@@ -53,7 +58,7 @@ service cloud.firestore {
       return data.id is string && data.id.size() <= 128 &&
              data.userId == userId &&
              data.wordsCount is number && data.wordsCount >= 0 &&
-             data.timestamp is number &&
+             ((data.timestamp is string && data.timestamp.size() <= 100) || data.timestamp is number) &&
              (!('bookId' in data) || (data.bookId is string && data.bookId.size() <= 128)) &&
              (!('bookTitle' in data) || (data.bookTitle is string && data.bookTitle.size() <= 200)) &&
              (!('language' in data) || (data.language is string && data.language.size() <= 10));
@@ -92,6 +97,8 @@ service cloud.firestore {
         allow get: if isOwner(userId) && isValidId(userId) && isValidId(logId);
         allow list: if isOwner(userId) && isValidId(userId);
         allow create: if isOwner(userId) && isValidId(userId) && isValidId(logId) &&
+                         isValidReadingLog(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(logId) &&
                          isValidReadingLog(request.resource.data, userId);
         allow delete: if isOwner(userId) && isValidId(userId) && isValidId(logId);
       }

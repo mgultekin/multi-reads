@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { X, Upload, FileText, Globe, Sparkles, Check, Loader2 } from 'lucide-react';
+import { X, Upload, FileText, Globe, BookOpen, Check, Loader2 } from 'lucide-react';
 import { ContentItem, GenreId, LanguageCode } from '../types/index.ts';
 import { GENRES, SUPPORTED_LANGUAGES } from '../data/constants.ts';
 import { contentService } from '../services/contentService.ts';
 import { storageService } from '../services/storageService.ts';
+import { parseEpubOrDocumentFile, ParsedChapter } from '../services/epubParser.ts';
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -18,32 +19,54 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   targetLang,
   onImportComplete,
 }) => {
-  const [activeTab, setActiveTab] = useState<'paste' | 'file' | 'wiki'>('paste');
+  const [activeTab, setActiveTab] = useState<'paste' | 'file' | 'wiki'>('file');
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [selectedLang, setSelectedLang] = useState<LanguageCode>(targetLang);
-  const [genre, setGenre] = useState<GenreId>('essays');
+  const [genre, setGenre] = useState<GenreId>('fiction');
   const [text, setText] = useState('');
+  const [parsedChapters, setParsedChapters] = useState<ParsedChapter[] | undefined>(undefined);
+  const [parsedFormat, setParsedFormat] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [wikiTopic, setWikiTopic] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
+  const processSelectedFile = async (file: File) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const parsed = await parseEpubOrDocumentFile(file);
+      setTitle(parsed.title || file.name.replace(/\.[^/.]+$/, ''));
+      setAuthor(parsed.author || 'Imported Author');
+      if (parsed.language) {
+        setSelectedLang(parsed.language);
+      }
+      setText(parsed.fullText);
+      setParsedChapters(parsed.chapters);
+      setParsedFormat(`${parsed.format.toUpperCase()} · ${parsed.chapters.length} chapters · ${parsed.totalWords.toLocaleString()} words`);
+    } catch (err: any) {
+      setError(err.message || 'Could not parse the selected file.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    processSelectedFile(file);
+  };
 
-    if (!title) {
-      setTitle(file.name.replace(/\.[^/.]+$/, ''));
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processSelectedFile(file);
     }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      setText(content);
-    };
-    reader.readAsText(file);
   };
 
   const handleFetchWikipedia = async () => {
@@ -60,6 +83,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       setTitle(data.title || wikiTopic);
       setAuthor('Wikipedia');
       setText(data.extract || '');
+      setParsedChapters(undefined);
+      setParsedFormat(null);
       setActiveTab('paste');
     } catch (err: any) {
       setError(err.message || 'Failed to fetch Wikipedia article.');
@@ -71,18 +96,19 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!text.trim()) {
-      setError('Please provide text to import.');
+      setError('Please provide text or upload an EPUB/manuscript file to import.');
       return;
     }
 
     setIsLoading(true);
     try {
       const newArticle = contentService.createCustomArticle(
-        title.trim() || 'Untitled Article',
+        title.trim() || 'Untitled Manuscript',
         author.trim() || 'Unknown Author',
         selectedLang,
         genre,
-        text
+        text,
+        parsedChapters
       );
 
       await storageService.saveBook(newArticle);
@@ -97,17 +123,17 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs">
-      <div className="w-full max-w-2xl bg-white dark:bg-[#1C1A18] rounded-2xl border border-stone-200 dark:border-stone-800 shadow-2xl p-6 text-stone-900 dark:text-stone-100 animate-in fade-in zoom-in-95">
+      <div className="w-full max-w-2xl bg-white dark:bg-[#1C1A18] rounded-2xl border border-stone-200 dark:border-stone-800 shadow-2xl p-6 text-stone-900 dark:text-stone-100 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
         
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
           <div>
-            <h2 className="font-display text-xl font-bold">Import Literature or Magazine Article</h2>
-            <p className="text-xs text-stone-500 font-serif italic">Turn any foreign language text into an interactive graded lesson.</p>
+            <h2 className="font-display text-xl font-bold">Import EPUB, Manuscript, or Article</h2>
+            <p className="text-xs text-stone-500 font-serif italic">Drop any .epub, .html, .md, or .txt book to parse chapters into an interactive graded reader.</p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition-colors"
+            className="p-1 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -115,6 +141,19 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
         {/* Import Mode Tabs */}
         <div className="flex gap-2 my-4 border-b border-stone-100 dark:border-stone-800 pb-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('file')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors ${
+              activeTab === 'file'
+                ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
+                : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-900'
+            }`}
+          >
+            <Upload className="w-3.5 h-3.5" />
+            EPUB / File Drop (.epub, .md, .txt)
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveTab('paste')}
@@ -139,19 +178,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({
           >
             <Globe className="w-3.5 h-3.5" />
             Fetch Wikipedia
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('file')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors ${
-              activeTab === 'file'
-                ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
-                : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-900'
-            }`}
-          >
-            <Upload className="w-3.5 h-3.5" />
-            Upload File (.txt, .md)
           </button>
         </div>
 
@@ -187,17 +213,40 @@ export const ImportModal: React.FC<ImportModalProps> = ({
           </div>
         )}
 
-        {/* Tab 3: File Upload */}
+        {/* Tab 3: EPUB / Manuscript Drag-and-Drop Zone */}
         {activeTab === 'file' && (
-          <div className="mb-4 p-6 border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-xl text-center">
-            <Upload className="w-8 h-8 mx-auto text-stone-400 mb-2 stroke-[1.5]" />
-            <p className="text-xs text-stone-600 dark:text-stone-400 mb-2">Select a .txt or .md manuscript file from your device</p>
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            className={`mb-4 p-6 border-2 border-dashed rounded-xl text-center transition-colors ${
+              isDragging
+                ? 'border-amber-600 bg-amber-50/40 dark:bg-amber-950/20'
+                : 'border-stone-200 dark:border-stone-800 bg-stone-50/40 dark:bg-stone-900/40'
+            }`}
+          >
+            <BookOpen className="w-8 h-8 mx-auto text-amber-700 dark:text-amber-500 mb-2 stroke-[1.5]" />
+            <p className="text-xs font-medium text-stone-800 dark:text-stone-200 mb-1">
+              Drag & drop an .epub, .html, .md, or .txt book here
+            </p>
+            <p className="text-[11px] text-stone-500 dark:text-stone-400 mb-3">
+              Automatically extracts EPUB OPF metadata (Title, Author, Language) and Spine chapters
+            </p>
             <input
               type="file"
-              accept=".txt,.md,.text"
+              accept=".epub,.txt,.md,.markdown,.html,.xhtml,.htm"
               onChange={handleFileUpload}
-              className="text-xs text-stone-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-stone-100 dark:file:bg-stone-800 file:text-stone-800 dark:file:text-stone-200 cursor-pointer"
+              className="text-xs text-stone-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-stone-200/80 dark:file:bg-stone-800 file:text-stone-800 dark:file:text-stone-200 cursor-pointer"
             />
+            {parsedFormat && (
+              <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                <Check className="w-3.5 h-3.5" />
+                <span>Parsed: {parsedFormat}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -267,15 +316,37 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             </div>
           </div>
 
+          {parsedChapters && parsedChapters.length > 1 && (
+            <div className="p-3 bg-stone-50 dark:bg-stone-900/60 border border-stone-200/80 dark:border-stone-800 rounded-lg">
+              <div className="text-[11px] font-medium text-stone-600 dark:text-stone-400 mb-1.5">
+                Detected Chapter Spine ({parsedChapters.length} chapters)
+              </div>
+              <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
+                {parsedChapters.map((ch, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-[11px] text-stone-700 dark:text-stone-300">
+                    <span className="truncate">{idx + 1}. {ch.title}</span>
+                    <span className="text-stone-400 shrink-0 ml-2">{ch.wordCount} words</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
-              Article Text Content (Target Language)
+              Manuscript / Article Content ({selectedLang.toUpperCase()})
             </label>
             <textarea
               required
-              rows={8}
+              rows={6}
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                if (activeTab === 'paste') {
+                  setParsedChapters(undefined);
+                  setParsedFormat(null);
+                }
+              }}
               placeholder="Paste article, newsletter excerpt, or book chapters here..."
               className="w-full p-3 font-reader text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100 focus:outline-none focus:border-amber-600 leading-relaxed"
             />

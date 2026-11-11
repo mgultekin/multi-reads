@@ -58,6 +58,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   });
   // Trigger re-render when background sentence batch prefetch finishes for bilingual parallel mode
   const [, setBilingualTick] = useState(0);
+  // Track words whose translations have been pre-warmed by hover prefetching before user click
+  const [prefetchedPreviews, setPrefetchedPreviews] = useState<Record<string, string>>({});
 
   const containerRef = useRef<HTMLDivElement>(null);
   const hoverTimerRef = useRef<number | null>(null);
@@ -216,14 +218,45 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     storageService.saveUserProfile({ ...profile, readerFontSize: nextSize });
   };
 
-  // 80ms Hover Intent Prefetcher: silently warms cache before click completes
+  // 55ms Hover Intent Prefetcher: detects mouse hover / focus on words and begins translation sequence before click
   const handleWordHoverStart = (word: string, surroundingSentence: string) => {
+    const clean = geminiClient.normalizeWord(word).toLowerCase();
+    if (!clean || clean.length <= 1) return;
+
+    // Check if already warm in L1 Cache or Local Lexicon (0ms)
+    const instant = geminiClient.getInstantCachedBreakdown(
+      clean,
+      surroundingSentence,
+      activeLangInfo.code,
+      activeLangInfo.name,
+      nativeLang
+    );
+    if (instant?.translation) {
+      if (!prefetchedPreviews[clean]) {
+        setPrefetchedPreviews((prev) => ({ ...prev, [clean]: instant.translation }));
+      }
+      return;
+    }
+
     if (hoverTimerRef.current) {
       window.clearTimeout(hoverTimerRef.current);
     }
     hoverTimerRef.current = window.setTimeout(() => {
-      geminiClient.prefetchWord(word, surroundingSentence, activeLangInfo.name, nativeLang);
-    }, 80);
+      geminiClient
+        .prefetchWord(
+          word,
+          surroundingSentence,
+          activeLangInfo.name,
+          nativeLang,
+          activeLangInfo.code
+        )
+        .then((res) => {
+          if (res?.translation) {
+            setPrefetchedPreviews((prev) => ({ ...prev, [clean]: res.translation }));
+          }
+        })
+        .catch(() => {});
+    }, 55);
   };
 
   const handleWordHoverEnd = () => {
@@ -233,7 +266,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }
   };
 
-  // Word click handler (0ms synchronous cache/prefetch hit -> ultra-fast flash-lite & progressive enrichment)
+  // Word click handler (0ms synchronous cache/local-lexicon/prefetch hit -> server fallback)
   const handleWordClick = async (word: string, surroundingSentence: string) => {
     const clean = geminiClient.normalizeWord(word);
     if (!clean || clean.length <= 1) return;
@@ -277,7 +310,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           if (activeLookupIdRef.current === lookupId) {
             setSelectedWordData(enriched);
           }
-        }
+        },
+        activeLangInfo.code
       );
       if (activeLookupIdRef.current === lookupId) {
         setSelectedWordData(breakdown);
@@ -288,6 +322,22 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       if (activeLookupIdRef.current === lookupId) {
         setIsLoadingBreakdown(false);
       }
+    }
+  };
+
+  const handleDeepAiEnrich = async () => {
+    if (!selectedWordData) return;
+    setSelectedWordData({ ...selectedWordData, isEnriching: true });
+    try {
+      const enriched = await geminiClient.enrichWithDeepAi(
+        selectedWordData.word,
+        selectedWordData.contextSentence,
+        activeLangInfo.name,
+        nativeLang
+      );
+      setSelectedWordData({ ...enriched, isEnriching: false });
+    } catch {
+      setSelectedWordData({ ...selectedWordData, isEnriching: false });
     }
   };
 
@@ -400,7 +450,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 <span key={`s-${pIdx}-${sIdx}`} className="inline">
                   {tokens.map((token, tIdx) => {
                     const isWord = /[\p{L}]/u.test(token);
-                    const isSaved = isWord && savedWordsMap[geminiClient.normalizeWord(token)];
+                    const normalizedToken = isWord ? geminiClient.normalizeWord(token).toLowerCase() : '';
+                    const isSaved = isWord && savedWordsMap[normalizedToken];
+                    const readyPreview = isWord ? prefetchedPreviews[normalizedToken] : undefined;
 
                     if (!isWord) {
                       return <span key={`t-${tIdx}`}>{token}</span>;
@@ -409,10 +461,16 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                     return (
                       <span
                         key={`t-${tIdx}`}
+                        tabIndex={0}
+                        data-prefetched={readyPreview ? 'true' : undefined}
+                        title={readyPreview ? `${geminiClient.normalizeWord(token)} → ${readyPreview}` : undefined}
                         onMouseEnter={() => handleWordHoverStart(token, sentence)}
                         onMouseLeave={handleWordHoverEnd}
+                        onFocus={() => handleWordHoverStart(token, sentence)}
+                        onBlur={handleWordHoverEnd}
+                        onTouchStart={() => handleWordHoverStart(token, sentence)}
                         onClick={() => handleWordClick(token, sentence)}
-                        className={`cursor-pointer rounded px-0.5 transition-colors select-text hover:bg-amber-200/70 dark:hover:bg-amber-900/40 hover:text-amber-950 dark:hover:text-amber-100 ${
+                        className={`cursor-pointer rounded px-0.5 transition-colors select-text hover:bg-amber-200/70 dark:hover:bg-amber-900/40 hover:text-amber-950 dark:hover:text-amber-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-600 ${
                           isSaved
                             ? 'border-b border-amber-600/60 dark:border-amber-400/60 text-amber-900 dark:text-amber-200 font-medium'
                             : ''
@@ -658,6 +716,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         speechLocale={activeLangInfo.speechLocale}
         nativeLang={nativeLang}
         onChangeNativeLang={onChangeNativeLang}
+        onRequestDeepAi={handleDeepAiEnrich}
       />
 
       {/* Interactive Section Comprehension Quiz Modal */}
