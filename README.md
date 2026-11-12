@@ -14,7 +14,7 @@
 
 *An open-source literary language acquisition platform built to run within **$0.00 free-tier limits** for personal study—born from the struggle of breaking past the B1 plateau in Italian, combining authentic world literature (`IT`, `ES`, `FR`, `DE`, `TR`, `EN`), `0ms` hybrid philological word breakdowns across **84 language pairs**, dynamic CEFR (`A1`–`C1`) adaptation, Anki-ready spaced repetition, and an in-app Free-Tier Quota Guardrail.*
 
-**[🖼️ Interactive Visual Showcase (`docs/showcase/index.html`)](docs/showcase/index.html)** · **[✍️ Read Our Medium Journey Story](docs/MEDIUM_STORY_OUR_JOURNEY.md)** · **[🛡️ $0.00 Guardrail Policy](docs/ZERO_COST_GUARDRAIL_POLICY.md)** · **[📋 Use-Case Catalog](docs/PRODUCT_USE_CASES_v0.5.0.md)**
+**[🖼️ Interactive Visual Showcase (`docs/showcase/index.html`)](docs/showcase/index.html)** · **[🛡️ $0.00 Guardrail Policy](docs/ZERO_COST_GUARDRAIL_POLICY.md)** · **[📋 Use-Case Catalog](docs/PRODUCT_USE_CASES_v0.5.0.md)**
 
 ---
 
@@ -32,7 +32,7 @@ Yet opening an unmodified foreign book creates immediate friction: looking up 10
 
 ## 🖼️ Visual Product Showcase
 
-> 💡 **Interactive Gallery & Press Kit**: Open [`docs/showcase/index.html`](docs/showcase/index.html) in any browser to explore interactive, high-resolution studio frames of all four pillars (built for live demos and Medium article screenshots).
+> 💡 **Interactive Gallery & Press Kit**: Open [`docs/showcase/index.html`](docs/showcase/index.html) in any browser to explore interactive, high-resolution studio frames of all four pillars (built for live demos and visual documentation).
 
 ### 1. 🇮🇹 Italian & World Literature Reader Studio (`ReaderView.tsx`)
 ```
@@ -169,7 +169,6 @@ FolioLingo (`v0.6.0`–`v0.6.1`) was audited, cross-verified, and upgraded by a 
 | Document | Description |
 | :--- | :--- |
 | **[`docs/showcase/index.html`](docs/showcase/index.html)** | **Interactive Product Showcase & Screenshot Press Kit** (Italian Reader flow, 0ms Popover, Wordbook, `$0.00` Guardrail Panel & Swarm diagram). |
-| **[`docs/MEDIUM_STORY_OUR_JOURNEY.md`](docs/MEDIUM_STORY_OUR_JOURNEY.md)** | **Medium Feature Article**: *"I Got Stuck Learning Italian, So I Hired a 7-Agent AI Swarm to Build My Way Out (for $0.00)"*. |
 | **[`docs/ZERO_COST_GUARDRAIL_POLICY.md`](docs/ZERO_COST_GUARDRAIL_POLICY.md)** | **Zero-Cost Billing Verification & Guardrail Policy**: Exact Firebase Spark & Gemini Free Tier math, 80% circuit-breaker equations, and audit trail. |
 | **[`docs/SQUAD_EXPANSION_PLAN_v0.6.0.md`](docs/SQUAD_EXPANSION_PLAN_v0.6.0.md)** | **7-Agent Swarm Consolidated Audit & Expansion Plan**: Engineering, UX/WCAG, Optimization, Marketing, Finance (1K/10K/100K MAU), and Verifier sign-off. |
 | **[`docs/PRODUCT_USE_CASES_v0.5.0.md`](docs/PRODUCT_USE_CASES_v0.5.0.md)** | **Formal Use-Case Catalog (`UC-01` – `UC-12`)**: End-to-end acceptance criteria across all four functional pillars. |
@@ -187,7 +186,7 @@ FolioLingo (`v0.6.0`–`v0.6.1`) was audited, cross-verified, and upgraded by a 
 | **`v0.4.0`** | **Hybrid Zero-Latency Translation Engine**: Proactive section batch pre-caching, hover intent prefetching, `gemini-3.1-flash-lite` (`ThinkingLevel.MINIMAL`), and resilient multi-provider backup translation. |
 | **`v0.5.0`** | **Product Owner Overhaul & Use-Case Catalog**: Server-assisted Project Gutenberg full-text loader, "Continue Reading" shelf, Bilingual Parallel View, SRS Due-Today queue & CSV/Anki export, Unicode-safe Cloze recall, decoupled Words Read vs. XP math, and Firestore Reading Logs. |
 | **`v0.6.0`** | **7-Agent Swarm Sprint & `$0.00` Guardrail Engine**: Memoized AST reader tokenization (`-97%` hover CPU), true server LRU + CEFR/Quiz adaptation caches, delta-only `writeBatch` Firestore login sync (`-89% to -99.7%` writes), final-section completion flow, mobile bottom-sheet popover, keyboard SRS shortcuts (`1`/`2`/`3`), and live `$0.00` Free-Tier Quota Guardrail Panel. |
-| **`v0.6.1`** | **Interactive Visual Showcase & Personal Journey Story**: Standalone visual showcase & press kit (`docs/showcase/index.html`), updated Medium publication story featuring the Italian learning journey, and upgraded visual documentation. |
+| **`v0.6.1`** | **Interactive Visual Showcase**: Standalone visual showcase & press kit (`docs/showcase/index.html`) and upgraded visual documentation. |
 
 ---
 
