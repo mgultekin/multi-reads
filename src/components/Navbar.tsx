@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, Settings, Moon, Sun, LogIn, LogOut, User as UserIcon } from 'lucide-react';
+import { Settings, Moon, Sun, LogOut, User as UserIcon } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { LanguageCode } from '../types/index.ts';
 import { SUPPORTED_LANGUAGES, BASE_LANGUAGES } from '../data/constants.ts';
@@ -31,7 +31,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   nativeLang,
   setNativeLang,
   streakDays,
-  xp,
+  xp: _xp,
   theme,
   toggleTheme,
   openSettings,
@@ -45,132 +45,112 @@ export const Navbar: React.FC<NavbarProps> = ({
     return null;
   }
 
+  const navItems: { id: NavbarProps['activeTab']; label: string }[] = [
+    { id: 'library', label: 'Library' },
+    { id: 'reader', label: 'Reader' },
+    { id: 'wordbook', label: 'Wordbook' },
+    { id: 'social', label: 'Journal' },
+  ];
+
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-[#E7E2D7] dark:border-[#2C2926] bg-[#FBF9F5]/95 dark:bg-[#141312]/95 backdrop-blur-md transition-colors">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-4 sm:px-6 h-14">
-        
-        {/* Zone 1: Wordmark + Compact Language Pair Selector */}
-        <div className="flex items-center gap-3 shrink-0 min-w-0">
+    <header className="sticky top-0 z-40 w-full border-b border-stone-200 dark:border-stone-800 bg-[#FAF8F4]/95 dark:bg-[#141312]/95 backdrop-blur-md transition-colors">
+      <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 px-4 sm:px-6 h-14">
+        {/* Left: Borderless Serif Wordmark + Quiet Language Pair Selector */}
+        <div className="flex items-center gap-4 shrink-0 min-w-0">
           <button
             onClick={() => setActiveTab('library')}
-            className="flex items-center gap-2 group text-left cursor-pointer focus:outline-none"
+            className="text-left cursor-pointer focus:outline-none group"
           >
-            <span className="font-display text-xl font-bold tracking-tight text-[#1C1917] dark:text-[#F5F2EB] group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors">
+            <span className="font-display text-xl font-bold tracking-tight text-[#18181B] dark:text-[#F4F4F5] group-hover:text-[#9A3412] dark:group-hover:text-[#D97706] transition-colors">
               FolioPress
             </span>
           </button>
 
-          <div className="flex items-center gap-1 bg-stone-100/90 dark:bg-stone-900/90 border border-stone-200/80 dark:border-stone-800 rounded-lg px-2 py-1">
+          <span aria-hidden="true" className="text-stone-300 dark:text-stone-700 text-xs hidden sm:inline">
+            |
+          </span>
+
+          <div className="flex items-center gap-1 text-xs">
             <select
               aria-label="Reading language"
               value={targetLang}
               onChange={(e) => setTargetLang(e.target.value as LanguageCode)}
-              className="bg-transparent text-xs font-semibold text-stone-800 dark:text-stone-200 cursor-pointer focus:outline-none"
+              className="bg-transparent font-medium text-[#18181B] dark:text-[#F4F4F5] hover:text-[#9A3412] dark:hover:text-[#D97706] cursor-pointer focus:outline-none transition-colors"
             >
               {SUPPORTED_LANGUAGES.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.flag} {lang.name}
+                <option key={lang.code} value={lang.code} className="bg-[#FAF8F4] dark:bg-[#141312]">
+                  {lang.code.toUpperCase()} · {lang.name}
                 </option>
               ))}
             </select>
 
-            <span className="text-stone-400 text-xs select-none">→</span>
+            <span className="text-[#71717A] dark:text-[#A1A1AA] select-none px-0.5">→</span>
 
             <select
               aria-label="Translation language"
               value={nativeLang}
               onChange={(e) => setNativeLang(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-amber-800 dark:text-amber-400 cursor-pointer focus:outline-none max-w-[100px] sm:max-w-none"
+              className="bg-transparent font-medium text-[#9A3412] dark:text-[#D97706] cursor-pointer focus:outline-none max-w-[90px] sm:max-w-none"
             >
               {BASE_LANGUAGES.map((b) => (
-                <option key={b.code} value={b.name}>
-                  {b.flag} {b.nativeName}
+                <option key={b.code} value={b.name} className="bg-[#FAF8F4] dark:bg-[#141312]">
+                  {b.nativeName}
                 </option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Zone 2: Clean Primary Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-stone-600 dark:text-stone-400">
-          <button
-            onClick={() => setActiveTab('library')}
-            className={`whitespace-nowrap py-1 transition-colors hover:text-stone-900 dark:hover:text-stone-100 cursor-pointer ${
-              activeTab === 'library'
-                ? 'text-amber-700 dark:text-amber-400 font-semibold border-b-2 border-amber-700 dark:border-amber-400'
-                : 'border-b-2 border-transparent'
-            }`}
-          >
-            Library
-          </button>
-
-          <button
-            onClick={() => setActiveTab('reader')}
-            className={`whitespace-nowrap py-1 transition-colors hover:text-stone-900 dark:hover:text-stone-100 cursor-pointer ${
-              activeTab === 'reader'
-                ? 'text-amber-700 dark:text-amber-400 font-semibold border-b-2 border-amber-700 dark:border-amber-400'
-                : 'border-b-2 border-transparent'
-            }`}
-          >
-            Reader
-          </button>
-
-          <button
-            onClick={() => setActiveTab('wordbook')}
-            className={`whitespace-nowrap py-1 transition-colors hover:text-stone-900 dark:hover:text-stone-100 cursor-pointer ${
-              activeTab === 'wordbook'
-                ? 'text-amber-700 dark:text-amber-400 font-semibold border-b-2 border-amber-700 dark:border-amber-400'
-                : 'border-b-2 border-transparent'
-            }`}
-          >
-            Wordbook
-          </button>
-
-          <button
-            onClick={() => setActiveTab('social')}
-            className={`whitespace-nowrap py-1 transition-colors hover:text-stone-900 dark:hover:text-stone-100 cursor-pointer ${
-              activeTab === 'social'
-                ? 'text-amber-700 dark:text-amber-400 font-semibold border-b-2 border-amber-700 dark:border-amber-400'
-                : 'border-b-2 border-transparent'
-            }`}
-          >
-            Progress
-          </button>
+        {/* Center: Clean Editorial Navigation Links */}
+        <nav className="hidden lg:flex items-center gap-7 text-sm text-[#71717A] dark:text-[#A1A1AA]">
+          {navItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`whitespace-nowrap py-1 border-b transition-colors cursor-pointer ${
+                  isActive
+                    ? 'text-[#18181B] dark:text-[#F4F4F5] font-medium border-[#9A3412] dark:border-[#D97706]'
+                    : 'border-transparent hover:text-[#18181B] dark:hover:text-[#F4F4F5]'
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
 
-        {/* Zone 3: Combined Streak/XP Pill, Theme Toggle & Settings */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Right: Quiet Monochrome Streak, Sign-In Link, Theme & Settings */}
+        <div className="flex items-center gap-3 shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('social')}
-            title={`${streakDays} day streak · ${xp} XP (Click for Progress & Log)`}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-100/90 dark:bg-stone-900/90 border border-stone-200/70 dark:border-stone-800 text-xs font-mono text-stone-700 dark:text-stone-300 hover:border-amber-500/60 transition-colors cursor-pointer"
+            title={`${streakDays} day reading streak — View Journal`}
+            className="hidden sm:inline-block text-xs font-mono tabular-nums text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
           >
-            <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-600" />
-            <span className="font-semibold text-amber-700 dark:text-amber-400">{streakDays}d</span>
-            <span className="text-stone-300 dark:text-stone-700">·</span>
-            <span>{xp} XP</span>
+            {streakDays}d
           </button>
 
           {isFirebaseConfigured &&
             (currentUser ? (
-              <div className="flex items-center gap-1.5 bg-stone-100 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-1 pr-2">
+              <div className="flex items-center gap-2 text-xs text-[#71717A] dark:text-[#A1A1AA]">
                 {currentUser.photoURL ? (
                   <img
                     src={currentUser.photoURL}
                     alt={currentUser.displayName || 'User'}
-                    className="w-5 h-5 rounded-full object-cover"
+                    className="w-5 h-5 rounded-full object-cover opacity-90"
                   />
                 ) : (
-                  <UserIcon className="w-4 h-4 text-stone-500 ml-1" />
+                  <UserIcon className="w-3.5 h-3.5" />
                 )}
-                <span className="text-xs font-medium text-stone-700 dark:text-stone-300 max-w-[80px] truncate hidden md:inline">
+                <span className="max-w-[80px] truncate hidden md:inline text-[#18181B] dark:text-[#F4F4F5]">
                   {currentUser.displayName || 'Account'}
                 </span>
                 <button
                   onClick={onSignOut}
                   title="Sign out"
-                  className="text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 ml-1 cursor-pointer"
+                  className="hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
@@ -178,11 +158,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             ) : (
               <button
                 onClick={onSignInWithGoogle}
-                className="flex items-center gap-1.5 px-3 py-1 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+                className="text-xs font-medium text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
                 title="Sign in with Google to sync reading data"
               >
-                <LogIn className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Sign In</span>
+                Sign in
               </button>
             ))}
 
@@ -190,48 +169,40 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={toggleTheme}
             aria-label="Toggle dark mode"
             title="Toggle light / dark theme"
-            className="p-1.5 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 rounded-md hover:bg-stone-200/50 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+            className="p-1 text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
           >
-            {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            {theme === 'light' ? <Moon className="w-4 h-4 stroke-[1.5]" /> : <Sun className="w-4 h-4 stroke-[1.5]" />}
           </button>
 
           <button
             onClick={openSettings}
             aria-label="Settings"
             title="Preferences & Free-Tier Quota Guardrail"
-            className="p-1.5 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 rounded-md hover:bg-stone-200/50 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+            className="p-1 text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-4 h-4 stroke-[1.5]" />
           </button>
         </div>
       </div>
 
       {/* Mobile Sub-Navigation Bar */}
-      <div className="lg:hidden flex items-center justify-around border-t border-stone-200/80 dark:border-stone-800/80 px-2 py-2 bg-stone-50 dark:bg-stone-950 text-xs font-medium text-stone-600 dark:text-stone-400">
-        <button
-          onClick={() => setActiveTab('library')}
-          className={`px-2 py-1 rounded cursor-pointer ${activeTab === 'library' ? 'text-amber-700 dark:text-amber-400 font-semibold' : ''}`}
-        >
-          Library
-        </button>
-        <button
-          onClick={() => setActiveTab('reader')}
-          className={`px-2 py-1 rounded cursor-pointer ${activeTab === 'reader' ? 'text-amber-700 dark:text-amber-400 font-semibold' : ''}`}
-        >
-          Reader
-        </button>
-        <button
-          onClick={() => setActiveTab('wordbook')}
-          className={`px-2 py-1 rounded cursor-pointer ${activeTab === 'wordbook' ? 'text-amber-700 dark:text-amber-400 font-semibold' : ''}`}
-        >
-          Wordbook
-        </button>
-        <button
-          onClick={() => setActiveTab('social')}
-          className={`px-2 py-1 rounded cursor-pointer ${activeTab === 'social' ? 'text-amber-700 dark:text-amber-400 font-semibold' : ''}`}
-        >
-          Progress
-        </button>
+      <div className="lg:hidden flex items-center justify-around border-t border-stone-200 dark:border-stone-800 px-3 py-2 bg-[#FAF8F4] dark:bg-[#141312] text-xs text-[#71717A] dark:text-[#A1A1AA]">
+        {navItems.map((item) => {
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`px-2 py-0.5 border-b cursor-pointer transition-colors ${
+                isActive
+                  ? 'text-[#18181B] dark:text-[#F4F4F5] font-medium border-[#9A3412] dark:border-[#D97706]'
+                  : 'border-transparent'
+              }`}
+            >
+              {item.label}
+            </button>
+          );
+        })}
       </div>
     </header>
   );

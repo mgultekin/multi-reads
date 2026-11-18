@@ -4,13 +4,10 @@ import {
   Check,
   BookOpen,
   Trash2,
-  Layers,
-  Edit3,
   Download,
   SkipForward,
   Plus,
   RotateCw,
-  Sparkles,
 } from 'lucide-react';
 import { Flashcard, LanguageCode } from '../types/index.ts';
 import { SUPPORTED_LANGUAGES } from '../data/constants.ts';
@@ -109,7 +106,6 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
     };
 
     await storageService.saveFlashcard(updated);
-    // Immediately synchronize in-memory React state so Mastery Level updates live
     setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
 
     if (isPositive) {
@@ -170,7 +166,11 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
         lemma: entry.lemma,
         partOfSpeech: entry.pos,
         morphology: entry.morph,
-        translation: entry.translations[baseLangName] || entry.translations.English || Object.values(entry.translations)[0] || word,
+        translation:
+          entry.translations[baseLangName] ||
+          entry.translations.English ||
+          Object.values(entry.translations)[0] ||
+          word,
         contextSentence: `${word.charAt(0).toUpperCase() + word.slice(1)} (${entry.pos.toLowerCase()})`,
         sentenceTranslation: `Starter vocabulary from ${activeLangInfo.name} core lexicon.`,
         language: targetLang,
@@ -227,7 +227,6 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
     onAwardXP(5);
   };
 
-  // Strip diacritics for forgiving comparison when user types without accents
   const stripAccents = (str: string) =>
     str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
@@ -328,107 +327,14 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  if (isLoading) {
-    return (
-      <div className="max-w-4xl mx-auto px-6 py-20 text-center">
-        <p className="font-serif italic text-stone-500 text-sm">Retrieving your vocabulary manuscript...</p>
-      </div>
-    );
-  }
-
-  if (cards.length === 0) {
-    return (
-      <div className="max-w-xl mx-auto px-6 py-16 text-center">
-        <BookOpen className="w-11 h-11 mx-auto text-stone-400 mb-4 stroke-[1.5]" />
-        <h2 className="font-display text-2xl font-bold text-stone-900 dark:text-stone-100 mb-2">
-          No {activeLangInfo.name} Cards Yet
-        </h2>
-        <p className="text-stone-600 dark:text-stone-400 text-sm max-w-md mx-auto mb-6 font-serif">
-          Save words directly while reading in the Reader, load 5 essential literary starter words, or add your own custom card below.
-        </p>
-
-        <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
-          <button
-            onClick={onOpenReader}
-            className="px-4 py-2.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
-          >
-            Open Reader
-          </button>
-          <button
-            onClick={handleLoadStarterWords}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-700 hover:bg-amber-800 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Load 5 Starter Words
-          </button>
-          <button
-            onClick={() => setIsAddOpen((prev) => !prev)}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 text-xs font-semibold rounded-lg hover:border-amber-600 transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add Custom Word
-          </button>
-        </div>
-
-        {isAddOpen && (
-          <form
-            onSubmit={handleCreateCustomCard}
-            className="text-left p-5 bg-white dark:bg-[#1C1A18] rounded-xl border border-stone-200 dark:border-stone-800 space-y-3"
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                type="text"
-                required
-                value={newWord}
-                onChange={(e) => setNewWord(e.target.value)}
-                placeholder={`${activeLangInfo.name} word`}
-                className="px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100"
-              />
-              <input
-                type="text"
-                required
-                value={newTranslation}
-                onChange={(e) => setNewTranslation(e.target.value)}
-                placeholder="Translation / meaning"
-                className="px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100"
-              />
-            </div>
-            <input
-              type="text"
-              value={newSentence}
-              onChange={(e) => setNewSentence(e.target.value)}
-              placeholder="Optional example sentence"
-              className="w-full px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setIsAddOpen(false)}
-                className="px-3 py-1.5 text-xs text-stone-500 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-1.5 bg-amber-700 text-white text-xs font-semibold rounded-lg cursor-pointer"
-              >
-                Save Card
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    );
-  }
-
-  // Unicode-safe Cloze sentence helper: replace target word in sentence even with non-ASCII letters (ñ, é, ü, ş, ğ, etc.)
+  // Unicode-safe Cloze sentence helper
   const renderClozeSentence = (sentence: string, targetWord: string) => {
     const escaped = targetWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const unicodeRegex = new RegExp(`(?<![\\p{L}])${escaped}(?![\\p{L}])`, 'giu');
     const parts = sentence.split(unicodeRegex);
 
     const blankNode = (
-      <span className="font-mono font-bold text-amber-800 dark:text-amber-400 underline px-1">
+      <span className="font-mono font-semibold text-[#9A3412] dark:text-[#D97706] underline underline-offset-4 px-1">
         {revealedHintLetters > 0
           ? targetWord.slice(0, revealedHintLetters) +
             '_'.repeat(Math.max(1, targetWord.length - revealedHintLetters))
@@ -437,7 +343,6 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
     );
 
     if (parts.length === 1) {
-      // Case-insensitive substring fallback
       const lowerSent = sentence.toLowerCase();
       const idx = lowerSent.indexOf(targetWord.toLowerCase());
       if (idx !== -1) {
@@ -465,37 +370,128 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
     );
   };
 
-  return (
-    <div className="max-w-4xl mx-auto px-6 py-10">
-      {/* Top Header & Mode Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-stone-200/80 dark:border-stone-800/80">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-stone-400 mb-1">
-            <span>Spaced Repetition & Context Recall</span>
-            <span aria-hidden="true">·</span>
-            <span>{activeLangInfo.name}</span>
-          </div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 dark:text-stone-100">
-            Vocabulary Practice Studio
-          </h1>
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl mx-auto px-6 py-20 text-center">
+        <p className="font-serif italic text-[#71717A] dark:text-[#A1A1AA] text-sm">
+          Retrieving your vocabulary manuscript...
+        </p>
+      </div>
+    );
+  }
+
+  if (cards.length === 0) {
+    return (
+      <div className="max-w-xl mx-auto px-6 py-20 text-center">
+        <BookOpen className="w-8 h-8 mx-auto text-[#71717A] dark:text-[#A1A1AA] mb-4 stroke-[1.25]" />
+        <h2 className="font-display text-2xl font-bold text-[#18181B] dark:text-[#F4F4F5] mb-2">
+          No {activeLangInfo.name} Words Saved
+        </h2>
+        <p className="text-[#71717A] dark:text-[#A1A1AA] text-sm max-w-md mx-auto mb-8 font-serif italic">
+          Tap any word while reading to preserve it here, load 5 literary starter terms, or enter a custom entry.
+        </p>
+
+        <div className="flex flex-wrap items-center justify-center gap-6 mb-8 text-xs font-medium">
+          <button
+            onClick={onOpenReader}
+            className="text-[#18181B] dark:text-[#F4F4F5] border-b border-[#18181B] dark:border-[#F4F4F5] pb-0.5 hover:text-[#9A3412] hover:border-[#9A3412] transition-colors cursor-pointer"
+          >
+            Open Reader
+          </button>
+          <button
+            onClick={handleLoadStarterWords}
+            className="text-[#9A3412] dark:text-[#D97706] hover:underline transition-colors cursor-pointer"
+          >
+            Load 5 Starter Words
+          </button>
+          <button
+            onClick={() => setIsAddOpen((prev) => !prev)}
+            className="inline-flex items-center gap-1 text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Word</span>
+          </button>
         </div>
 
-        {/* Mode Selector Tabs */}
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          <div className="flex items-center p-1 bg-stone-100 dark:bg-stone-900 rounded-lg border border-stone-200/60 dark:border-stone-800/60">
+        {isAddOpen && (
+          <form
+            onSubmit={handleCreateCustomCard}
+            className="text-left py-5 border-y border-stone-200 dark:border-stone-800 space-y-4"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <input
+                type="text"
+                required
+                value={newWord}
+                onChange={(e) => setNewWord(e.target.value)}
+                placeholder={`${activeLangInfo.name} word`}
+                className="px-0 py-1.5 text-xs bg-transparent border-b border-stone-200 dark:border-stone-800 text-[#18181B] dark:text-[#F4F4F5] focus:outline-none focus:border-[#9A3412] dark:focus:border-[#D97706]"
+              />
+              <input
+                type="text"
+                required
+                value={newTranslation}
+                onChange={(e) => setNewTranslation(e.target.value)}
+                placeholder="Translation / meaning"
+                className="px-0 py-1.5 text-xs bg-transparent border-b border-stone-200 dark:border-stone-800 text-[#18181B] dark:text-[#F4F4F5] focus:outline-none focus:border-[#9A3412] dark:focus:border-[#D97706]"
+              />
+            </div>
+            <input
+              type="text"
+              value={newSentence}
+              onChange={(e) => setNewSentence(e.target.value)}
+              placeholder="Optional context sentence"
+              className="w-full px-0 py-1.5 text-xs bg-transparent border-b border-stone-200 dark:border-stone-800 text-[#18181B] dark:text-[#F4F4F5] focus:outline-none focus:border-[#9A3412] dark:focus:border-[#D97706]"
+            />
+            <div className="flex justify-end gap-4 text-xs">
+              <button
+                type="button"
+                onClick={() => setIsAddOpen(false)}
+                className="text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="font-semibold text-[#9A3412] dark:text-[#D97706] hover:underline cursor-pointer"
+              >
+                Save Word
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      {/* Slim Header + Underlined Mode Links */}
+      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-4 pb-5 border-b border-stone-200 dark:border-stone-800">
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#18181B] dark:text-[#F4F4F5]">
+            Wordbook
+          </h1>
+          <span className="text-xs font-mono text-[#71717A] dark:text-[#A1A1AA]">
+            {activeLangInfo.name} · {dueCards.length} due
+          </span>
+        </div>
+
+        {/* Plain-Text Underlined Mode Switcher + Minimal Actions */}
+        <div className="flex flex-wrap items-center gap-5 text-xs">
+          <div className="flex items-center gap-4">
             <button
               onClick={() => {
                 setPracticeMode('flip');
                 setIsFlipped(false);
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+              className={`pb-0.5 border-b transition-colors cursor-pointer ${
                 practiceMode === 'flip'
-                  ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-xs'
-                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
+                  ? 'text-[#18181B] dark:text-[#F4F4F5] font-semibold border-[#9A3412] dark:border-[#D97706]'
+                  : 'text-[#71717A] dark:text-[#A1A1AA] border-transparent hover:text-[#18181B] dark:hover:text-[#F4F4F5]'
               }`}
             >
-              <Layers className="w-3.5 h-3.5" />
-              3D Flip Deck
+              Cards
             </button>
 
             <button
@@ -504,69 +500,74 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
                 setFillFeedback('idle');
                 setUserFillInput('');
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+              className={`pb-0.5 border-b transition-colors cursor-pointer ${
                 practiceMode === 'cloze'
-                  ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-xs'
-                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
+                  ? 'text-[#18181B] dark:text-[#F4F4F5] font-semibold border-[#9A3412] dark:border-[#D97706]'
+                  : 'text-[#71717A] dark:text-[#A1A1AA] border-transparent hover:text-[#18181B] dark:hover:text-[#F4F4F5]'
               }`}
             >
-              <Edit3 className="w-3.5 h-3.5" />
-              Fill-in-the-Blank
+              Cloze
             </button>
 
             <button
               onClick={() => setPracticeMode('list')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+              className={`pb-0.5 border-b transition-colors cursor-pointer ${
                 practiceMode === 'list'
-                  ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-xs'
-                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
+                  ? 'text-[#18181B] dark:text-[#F4F4F5] font-semibold border-[#9A3412] dark:border-[#D97706]'
+                  : 'text-[#71717A] dark:text-[#A1A1AA] border-transparent hover:text-[#18181B] dark:hover:text-[#F4F4F5]'
               }`}
             >
-              Word Index ({cards.length})
+              Index ({cards.length})
             </button>
           </div>
 
-          <button
-            onClick={() => setIsAddOpen((prev) => !prev)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-lg hover:bg-stone-800 dark:hover:bg-white transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add Word
-          </button>
+          <span aria-hidden="true" className="text-stone-300 dark:text-stone-700 hidden sm:inline">
+            |
+          </span>
 
-          <button
-            onClick={handleExportCSV}
-            title="Export deck to CSV"
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-700 dark:text-stone-300 hover:border-amber-600 transition-colors cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-amber-700" />
-            CSV
-          </button>
+          <div className="flex items-center gap-3 text-[#71717A] dark:text-[#A1A1AA]">
+            <button
+              onClick={() => setIsAddOpen((prev) => !prev)}
+              className="inline-flex items-center gap-1 hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add</span>
+            </button>
 
-          <button
-            onClick={handleExportAnkiTSV}
-            title="Export deck to Anki TSV format"
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-700 dark:text-stone-300 hover:border-amber-600 transition-colors cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-amber-700" />
-            Anki
-          </button>
+            <button
+              onClick={handleExportCSV}
+              title="Export deck to CSV"
+              className="inline-flex items-center gap-1 hover:text-[#9A3412] dark:hover:text-[#D97706] transition-colors cursor-pointer"
+            >
+              <Download className="w-3 h-3" />
+              <span>CSV</span>
+            </button>
+
+            <button
+              onClick={handleExportAnkiTSV}
+              title="Export deck to Anki TSV format"
+              className="inline-flex items-center gap-1 hover:text-[#9A3412] dark:hover:text-[#D97706] transition-colors cursor-pointer"
+            >
+              <Download className="w-3 h-3" />
+              <span>Anki</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {isAddOpen && (
         <form
           onSubmit={handleCreateCustomCard}
-          className="mb-6 p-4 bg-white dark:bg-[#1C1A18] rounded-xl border border-stone-200 dark:border-stone-800 space-y-3"
+          className="py-5 border-b border-stone-200 dark:border-stone-800 space-y-4"
         >
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <input
               type="text"
               required
               value={newWord}
               onChange={(e) => setNewWord(e.target.value)}
               placeholder={`${activeLangInfo.name} word`}
-              className="px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100"
+              className="px-0 py-1.5 text-xs bg-transparent border-b border-stone-200 dark:border-stone-800 text-[#18181B] dark:text-[#F4F4F5] focus:outline-none focus:border-[#9A3412] dark:focus:border-[#D97706]"
             />
             <input
               type="text"
@@ -574,74 +575,72 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
               value={newTranslation}
               onChange={(e) => setNewTranslation(e.target.value)}
               placeholder="Translation / meaning"
-              className="px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100"
+              className="px-0 py-1.5 text-xs bg-transparent border-b border-stone-200 dark:border-stone-800 text-[#18181B] dark:text-[#F4F4F5] focus:outline-none focus:border-[#9A3412] dark:focus:border-[#D97706]"
             />
             <input
               type="text"
               value={newSentence}
               onChange={(e) => setNewSentence(e.target.value)}
               placeholder="Optional context sentence"
-              className="px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100"
+              className="px-0 py-1.5 text-xs bg-transparent border-b border-stone-200 dark:border-stone-800 text-[#18181B] dark:text-[#F4F4F5] focus:outline-none focus:border-[#9A3412] dark:focus:border-[#D97706]"
             />
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-4 text-xs">
             <button
               type="button"
               onClick={() => setIsAddOpen(false)}
-              className="px-3 py-1.5 text-xs text-stone-500 cursor-pointer"
+              className="text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 bg-amber-700 text-white text-xs font-semibold rounded-lg cursor-pointer"
+              className="font-semibold text-[#9A3412] dark:text-[#D97706] hover:underline cursor-pointer"
             >
-              Save Card (+5 XP)
+              Save Card
             </button>
           </div>
         </form>
       )}
 
-      {/* SRS Queue Filter Strip (All | Due Now | Mastered) */}
-      <div className="flex items-center justify-between gap-4 mb-8">
-        <div className="flex items-center gap-2">
-          {(
-            [
-              { id: 'all', label: `All Cards (${cards.length})` },
-              { id: 'due', label: `Due for Review (${dueCards.length})` },
-              { id: 'mastered', label: `Mastered (${masteredCards.length})` },
-            ] as const
-          ).map((scope) => (
-            <button
-              key={scope.id}
-              onClick={() => {
-                setFilterScope(scope.id);
-                setCurrentIndex(0);
-                setIsFlipped(false);
-              }}
-              className={`px-3 py-1 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
-                filterScope === scope.id
-                  ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100'
-                  : 'bg-white dark:bg-[#1C1A18] text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800 hover:border-amber-600/50'
-              }`}
-            >
-              {scope.label}
-            </button>
-          ))}
-        </div>
+      {/* Minimal SRS Queue Filter Links */}
+      <div className="flex items-center gap-5 py-4 text-xs mb-6">
+        {(
+          [
+            { id: 'all', label: `All (${cards.length})` },
+            { id: 'due', label: `Due (${dueCards.length})` },
+            { id: 'mastered', label: `Mastered (${masteredCards.length})` },
+          ] as const
+        ).map((scope) => (
+          <button
+            key={scope.id}
+            onClick={() => {
+              setFilterScope(scope.id);
+              setCurrentIndex(0);
+              setIsFlipped(false);
+            }}
+            className={`pb-0.5 border-b transition-colors cursor-pointer ${
+              filterScope === scope.id
+                ? 'text-[#18181B] dark:text-[#F4F4F5] font-medium border-[#9A3412] dark:border-[#D97706]'
+                : 'text-[#71717A] dark:text-[#A1A1AA] border-transparent hover:text-[#18181B] dark:hover:text-[#F4F4F5]'
+            }`}
+          >
+            {scope.label}
+          </button>
+        ))}
       </div>
 
       {filteredDeck.length === 0 ? (
-        <div className="py-16 text-center bg-white dark:bg-[#1C1A18] rounded-2xl border border-stone-200/80 dark:border-stone-800/80 p-8">
-          <p className="font-display text-lg font-bold text-stone-900 dark:text-stone-100 mb-1">
-            No cards in "{filterScope === 'due' ? 'Due for Review' : 'Mastered'}" queue right now
+        <div className="py-16 text-center border-y border-stone-200 dark:border-stone-800">
+          <p className="font-display text-lg font-bold text-[#18181B] dark:text-[#F4F4F5] mb-1">
+            No cards in "{filterScope === 'due' ? 'Due' : 'Mastered'}" queue right now
           </p>
-          <p className="text-xs text-stone-500 font-serif mb-4">
-            Switch to "All Cards" to practice your full vocabulary deck at any time.
+          <p className="text-xs text-[#71717A] dark:text-[#A1A1AA] font-serif italic mb-5">
+            Switch to "All" to review your complete vocabulary index at any time.
           </p>
           <button
             onClick={() => setFilterScope('all')}
-            className="px-4 py-2 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-xs font-semibold rounded-lg cursor-pointer"
+            className="text-xs font-medium text-[#9A3412] dark:text-[#D97706] hover:underline cursor-pointer"
           >
             Show All Cards ({cards.length})
           </button>
@@ -650,15 +649,15 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
         <>
           {practiceMode === 'flip' && currentCard && (
             <div className="max-w-xl mx-auto">
-              {/* Card counter */}
-              <div className="flex items-center justify-between text-xs text-stone-400 dark:text-stone-500 mb-3 px-1">
+              {/* Quiet Card Counter */}
+              <div className="flex items-center justify-between text-[11px] font-mono text-[#71717A] dark:text-[#A1A1AA] mb-3">
                 <span>
-                  Card {safeIndex + 1} of {filteredDeck.length}
+                  Card {safeIndex + 1} / {filteredDeck.length}
                 </span>
-                <span className="font-mono">Mastery Level: {currentCard.masteryLevel}/5</span>
+                <span>Mastery {currentCard.masteryLevel}/5</span>
               </div>
 
-              {/* 3D Flip Card Container */}
+              {/* Clean Hairline Flashcard Stage */}
               <div
                 role="button"
                 tabIndex={0}
@@ -671,57 +670,54 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
                     setIsFlipped((prev) => !prev);
                   }
                 }}
-                className="w-full min-h-[320px] bg-white dark:bg-[#1C1A18] rounded-2xl border border-stone-200/90 dark:border-stone-800/90 shadow-sm p-8 cursor-pointer flex flex-col justify-between hover:border-amber-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 transition-all select-none"
+                className="w-full min-h-[300px] border-y border-stone-200 dark:border-stone-800 py-8 cursor-pointer flex flex-col justify-between focus:outline-none focus-visible:ring-1 focus-visible:ring-[#9A3412] transition-colors select-none"
               >
                 {!isFlipped ? (
-                  /* FRONT OF CARD */
                   <div className="flex-1 flex flex-col justify-between">
-                    <div className="flex items-start justify-between">
-                      <span className="text-[11px] font-medium uppercase tracking-wider text-amber-800 dark:text-amber-400">
-                        Target Word · Tap to reveal
-                      </span>
+                    <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-[#71717A] dark:text-[#A1A1AA]">
+                      <span>Tap or press Space to reveal</span>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handlePlayAudio(currentCard.word);
                         }}
-                        className="p-1 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+                        className="p-1 hover:text-[#9A3412] dark:hover:text-[#D97706] transition-colors cursor-pointer"
                         title="Pronounce"
                       >
                         <Volume2 className="w-4 h-4" />
                       </button>
                     </div>
 
-                    <div className="my-8 text-center">
-                      <h2 className="font-serif text-4xl font-bold tracking-tight text-stone-900 dark:text-stone-100 mb-2">
+                    <div className="my-10 text-center">
+                      <h2 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight text-[#18181B] dark:text-[#F4F4F5] mb-2">
                         {currentCard.word}
                       </h2>
                       {currentCard.phoneticIpa && (
-                        <p className="font-mono text-xs text-stone-400">{currentCard.phoneticIpa}</p>
+                        <p className="font-mono text-xs text-[#71717A] dark:text-[#A1A1AA]">
+                          {currentCard.phoneticIpa}
+                        </p>
                       )}
                     </div>
 
-                    {/* Authentic Context Sentence Preview */}
-                    <div className="bg-stone-50/80 dark:bg-stone-900/40 p-4 rounded-xl border border-stone-100 dark:border-stone-800/60">
-                      <span className="text-[10px] uppercase font-semibold text-stone-400 block mb-1">
-                        Authentic Sentence from {currentCard.bookTitle || 'Reading'}
+                    <div className="pt-4 border-t border-stone-200/70 dark:border-stone-800/70">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-[#71717A] dark:text-[#A1A1AA] block mb-1">
+                        {currentCard.bookTitle || 'Reading Context'}
                       </span>
-                      <p className="font-reader italic text-sm text-stone-700 dark:text-stone-300 leading-relaxed">
+                      <p className="font-reader italic text-sm text-[#18181B] dark:text-[#F4F4F5] leading-relaxed">
                         "{currentCard.contextSentence}"
                       </p>
                     </div>
                   </div>
                 ) : (
-                  /* BACK OF CARD */
-                  <div className="flex-1 flex flex-col justify-between animate-in fade-in duration-200">
+                  <div className="flex-1 flex flex-col justify-between animate-in fade-in duration-150">
                     <div>
-                      <div className="flex items-start justify-between border-b border-stone-100 dark:border-stone-800 pb-2 mb-4">
+                      <div className="flex items-start justify-between border-b border-stone-200/80 dark:border-stone-800/80 pb-3 mb-5">
                         <div>
-                          <span className="font-serif text-2xl font-bold text-stone-900 dark:text-stone-100">
+                          <span className="font-serif text-2xl font-bold text-[#18181B] dark:text-[#F4F4F5]">
                             {currentCard.word}
                           </span>
-                          <span className="ml-2 font-mono text-xs text-stone-400">
-                            (root: {currentCard.lemma})
+                          <span className="ml-2.5 font-mono text-xs text-[#71717A] dark:text-[#A1A1AA]">
+                            root: {currentCard.lemma}
                           </span>
                         </div>
 
@@ -730,39 +726,34 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
                             e.stopPropagation();
                             handlePlayAudio(currentCard.word);
                           }}
-                          className="p-1 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+                          className="p-1 text-[#71717A] hover:text-[#9A3412] dark:hover:text-[#D97706] cursor-pointer"
                         >
                           <Volume2 className="w-4 h-4" />
                         </button>
                       </div>
 
-                      {/* Contextual Translation */}
-                      <div className="mb-4">
-                        <span className="text-[10px] uppercase font-semibold text-amber-800 dark:text-amber-400 block mb-1">
+                      <div className="mb-5">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-[#9A3412] dark:text-[#D97706] block mb-1">
                           Contextual Meaning
                         </span>
-                        <p className="text-lg font-medium text-stone-900 dark:text-stone-100">
+                        <p className="text-xl font-medium text-[#18181B] dark:text-[#F4F4F5]">
                           {currentCard.translation}
                         </p>
                       </div>
 
-                      {/* Morphology details */}
-                      <div className="text-xs text-stone-600 dark:text-stone-400 mb-4 space-y-1">
+                      <div className="text-xs text-[#71717A] dark:text-[#A1A1AA] mb-5 space-y-1">
                         <p>
-                          <strong className="text-stone-800 dark:text-stone-200">Grammar:</strong>{' '}
-                          {currentCard.partOfSpeech} · {currentCard.morphology}
+                          <strong className="font-medium text-[#18181B] dark:text-[#F4F4F5]">Grammar:</strong>{' '}
+                          {currentCard.partOfSpeech}
+                          {currentCard.morphology ? ` · ${currentCard.morphology}` : ''}
                         </p>
                         {currentCard.usageNote && (
-                          <p className="font-serif italic text-stone-500 text-[11px] pt-1">
-                            {currentCard.usageNote}
-                          </p>
+                          <p className="font-serif italic text-[11px] pt-1">{currentCard.usageNote}</p>
                         )}
                       </div>
 
-                      {/* Sentence Translation */}
-                      <div className="bg-stone-50 dark:bg-stone-900/60 p-3 rounded-lg border border-stone-100 dark:border-stone-800 text-xs">
-                        <span className="text-stone-400 block mb-1">Full Sentence Translation:</span>
-                        <p className="text-stone-700 dark:text-stone-300 font-serif italic">
+                      <div className="pt-4 border-t border-stone-200/70 dark:border-stone-800/70 text-xs">
+                        <p className="text-[#71717A] dark:text-[#A1A1AA] font-serif italic">
                           "{currentCard.sentenceTranslation}"
                         </p>
                       </div>
@@ -771,22 +762,22 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
                 )}
               </div>
 
-              {/* Rating Action Buttons */}
+              {/* Clean Hairline Grading Bar */}
               <div className="mt-6">
                 {!isFlipped ? (
                   <button
                     onClick={() => setIsFlipped(true)}
-                    className="w-full py-3 px-4 rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full py-2.5 px-4 border border-stone-300 dark:border-stone-700 hover:border-[#9A3412] dark:hover:border-[#D97706] text-[#18181B] dark:text-[#F4F4F5] text-xs font-medium rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
                   >
-                    <RotateCw className="w-4 h-4" />
-                    Reveal Meaning & Grammar [Space]
+                    <RotateCw className="w-3.5 h-3.5" />
+                    <span>Reveal Meaning & Grammar [Space]</span>
                   </button>
                 ) : (
                   <div className="grid grid-cols-3 gap-3">
                     <button
                       onClick={() => handleScoreCard('hard')}
                       title="Shortcut: Press 1"
-                      className="py-3 px-3 rounded-xl border border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-900 text-xs font-semibold text-stone-700 dark:text-stone-300 transition-colors cursor-pointer"
+                      className="py-2.5 px-3 rounded-lg border border-stone-200 dark:border-stone-800 hover:border-stone-400 dark:hover:border-stone-600 text-xs font-medium text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
                     >
                       [1] Hard
                     </button>
@@ -794,126 +785,118 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
                     <button
                       onClick={() => handleScoreCard('good')}
                       title="Shortcut: Press 2"
-                      className="py-3 px-3 rounded-xl bg-amber-700 hover:bg-amber-800 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1"
+                      className="py-2.5 px-3 rounded-lg border border-[#9A3412]/50 dark:border-[#D97706]/50 hover:border-[#9A3412] dark:hover:border-[#D97706] text-xs font-semibold text-[#9A3412] dark:text-[#D97706] transition-colors cursor-pointer flex items-center justify-center gap-1"
                     >
                       <Check className="w-3.5 h-3.5" />
-                      [2] Good (+10 XP)
+                      <span>[2] Good</span>
                     </button>
 
                     <button
                       onClick={() => handleScoreCard('easy')}
                       title="Shortcut: Press 3"
-                      className="py-3 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                      className="py-2.5 px-3 rounded-lg bg-[#18181B] dark:bg-[#F4F4F5] text-[#FAF8F4] dark:text-[#141312] text-xs font-semibold transition-opacity hover:opacity-90 cursor-pointer"
                     >
-                      [3] Easy (+15 XP)
+                      [3] Easy
                     </button>
                   </div>
                 )}
               </div>
-              <p className="mt-2.5 text-center text-[11px] font-mono text-stone-400 dark:text-stone-500">
-                Keyboard: Space to flip · When flipped: [1] Hard · [2] Good · [3] Easy
+              <p className="mt-3 text-center text-[11px] font-mono text-[#71717A] dark:text-[#A1A1AA]">
+                Space to flip · [1] Hard · [2] Good · [3] Easy
               </p>
             </div>
           )}
 
           {practiceMode === 'cloze' && currentCard && (
             <div className="max-w-xl mx-auto">
-              {/* Card counter */}
-              <div className="flex items-center justify-between text-xs text-stone-400 mb-3 px-1">
+              <div className="flex items-center justify-between text-[11px] font-mono text-[#71717A] dark:text-[#A1A1AA] mb-3">
                 <span>
-                  Challenge {safeIndex + 1} of {filteredDeck.length}
+                  Challenge {safeIndex + 1} / {filteredDeck.length}
                 </span>
-                <span className="font-mono">Mastery: {currentCard.masteryLevel}/5</span>
+                <span>Mastery {currentCard.masteryLevel}/5</span>
               </div>
 
-              <div className="bg-white dark:bg-[#1C1A18] rounded-2xl border border-stone-200/90 dark:border-stone-800/90 shadow-sm p-8">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-amber-800 dark:text-amber-400 block mb-2">
-                  Contextual Recall Challenge
+              <div className="border-y border-stone-200 dark:border-stone-800 py-8">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-[#9A3412] dark:text-[#D97706] block mb-4">
+                  Contextual Recall
                 </span>
 
-                {/* Target Sentence with Blank */}
-                <div className="my-6 p-5 bg-stone-50 dark:bg-stone-900/60 rounded-xl border border-stone-200/60 dark:border-stone-800/60">
-                  <p className="font-reader text-lg leading-relaxed text-stone-800 dark:text-stone-200">
-                    "{renderClozeSentence(currentCard.contextSentence, currentCard.word)}"
-                  </p>
+                <p className="font-reader text-lg sm:text-xl leading-relaxed text-[#18181B] dark:text-[#F4F4F5] mb-6">
+                  "{renderClozeSentence(currentCard.contextSentence, currentCard.word)}"
+                </p>
+
+                <div className="mb-6 text-xs text-[#71717A] dark:text-[#A1A1AA]">
+                  <span className="font-mono uppercase tracking-wider text-[10px] mr-2">Meaning:</span>
+                  <span className="text-[#18181B] dark:text-[#F4F4F5] font-medium">
+                    {currentCard.translation}
+                  </span>{' '}
+                  <span>({currentCard.partOfSpeech})</span>
                 </div>
 
-                {/* Translation Clue */}
-                <div className="mb-6">
-                  <span className="text-[11px] uppercase text-stone-400 block mb-1">Target Meaning Clue:</span>
-                  <p className="text-sm font-medium text-stone-700 dark:text-stone-300">
-                    {currentCard.translation}{' '}
-                    <span className="text-stone-400 text-xs">({currentCard.partOfSpeech})</span>
-                  </p>
-                </div>
-
-                {/* Input Form */}
                 <form onSubmit={handleCheckCloze} className="space-y-4">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      autoFocus
-                      value={userFillInput}
-                      onChange={(e) => {
-                        setUserFillInput(e.target.value);
-                        if (fillFeedback !== 'idle') setFillFeedback('idle');
-                      }}
-                      placeholder="Type the missing word in target language..."
-                      className={`w-full px-4 py-3 text-sm bg-white dark:bg-stone-800 border rounded-xl font-medium focus:outline-none transition-colors ${
-                        fillFeedback === 'correct'
-                          ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-200'
-                          : fillFeedback === 'incorrect'
-                          ? 'border-red-500 bg-red-50 dark:bg-red-950/20 text-red-900 dark:text-red-200'
-                          : 'border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100'
-                      }`}
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={userFillInput}
+                    onChange={(e) => {
+                      setUserFillInput(e.target.value);
+                      if (fillFeedback !== 'idle') setFillFeedback('idle');
+                    }}
+                    placeholder="Type the missing word..."
+                    className={`w-full px-0 py-2 text-base bg-transparent border-b font-serif focus:outline-none transition-colors ${
+                      fillFeedback === 'correct'
+                        ? 'border-emerald-600 text-emerald-700 dark:text-emerald-300'
+                        : fillFeedback === 'incorrect'
+                        ? 'border-red-500 text-red-700 dark:text-red-300'
+                        : 'border-stone-300 dark:border-stone-700 text-[#18181B] dark:text-[#F4F4F5] focus:border-[#9A3412] dark:focus:border-[#D97706]'
+                    }`}
+                  />
 
                   {fillFeedback === 'correct' && (
-                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 text-xs font-medium rounded-lg flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-600" />
-                      Exact match! +15 XP awarded. Advancing to next challenge...
+                    <div className="text-xs font-medium text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Exact match. Advancing to next prompt...</span>
                     </div>
                   )}
 
                   {fillFeedback === 'incorrect' && (
-                    <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 text-xs font-medium rounded-lg flex items-center justify-between">
-                      <span>Not quite. Check your spelling or click Hint.</span>
+                    <div className="text-xs text-red-600 dark:text-red-400 flex items-center justify-between">
+                      <span>Not quite — check accents or request a hint.</span>
                       <button
                         type="button"
                         onClick={() => setUserFillInput(currentCard.word)}
-                        className="underline font-semibold cursor-pointer"
+                        className="underline font-medium cursor-pointer"
                       >
-                        Show Word
+                        Reveal Word
                       </button>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between gap-3 pt-2">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-3 pt-2 text-xs">
+                    <div className="flex items-center gap-4 text-[#71717A] dark:text-[#A1A1AA]">
                       <button
                         type="button"
                         onClick={handleHint}
-                        className="px-3.5 py-2 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 rounded-lg border border-stone-200 dark:border-stone-800 hover:border-stone-400 transition-colors cursor-pointer"
+                        className="hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
                       >
-                        Letter Hint ({revealedHintLetters}/{currentCard.word.length})
+                        Hint ({revealedHintLetters}/{currentCard.word.length})
                       </button>
 
                       <button
                         type="button"
                         onClick={handleSkipCloze}
-                        className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-stone-500 hover:text-stone-900 dark:hover:text-stone-200 rounded-lg border border-stone-200 dark:border-stone-800 transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
                       >
                         <SkipForward className="w-3.5 h-3.5" />
-                        Skip
+                        <span>Skip</span>
                       </button>
                     </div>
 
                     <button
                       type="submit"
-                      className="px-6 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
+                      className="font-semibold text-[#18181B] dark:text-[#F4F4F5] border-b border-[#18181B] dark:border-[#F4F4F5] pb-0.5 hover:text-[#9A3412] hover:border-[#9A3412] transition-colors cursor-pointer"
                     >
-                      Verify Answer
+                      Verify Answer →
                     </button>
                   </div>
                 </form>
@@ -922,45 +905,47 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
           )}
 
           {practiceMode === 'list' && (
-            <div className="bg-white dark:bg-[#1C1A18] rounded-2xl border border-stone-200/90 dark:border-stone-800/90 divide-y divide-stone-100 dark:divide-stone-800">
+            <div className="border-t border-stone-200 dark:border-stone-800 divide-y divide-stone-200 dark:divide-stone-800">
               {filteredDeck.map((card) => (
                 <div
                   key={card.id}
-                  className="p-4 sm:p-5 flex items-center justify-between gap-4 hover:bg-stone-50/60 dark:hover:bg-stone-900/40 transition-colors"
+                  className="py-4 flex items-center justify-between gap-4 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2.5 mb-1">
-                      <h4 className="font-serif text-lg font-bold text-stone-900 dark:text-stone-100 truncate">
+                    <div className="flex items-center gap-2.5 mb-0.5">
+                      <h4 className="font-serif text-lg font-bold text-[#18181B] dark:text-[#F4F4F5] truncate">
                         {card.word}
                       </h4>
                       <button
                         onClick={() => handlePlayAudio(card.word)}
-                        className="p-0.5 text-stone-400 hover:text-stone-700 cursor-pointer"
+                        className="p-0.5 text-[#71717A] hover:text-[#9A3412] dark:hover:text-[#D97706] cursor-pointer"
                       >
                         <Volume2 className="w-3.5 h-3.5" />
                       </button>
-                      <span className="text-xs text-stone-400 font-mono">· {card.lemma}</span>
+                      <span className="text-xs text-[#71717A] dark:text-[#A1A1AA] font-mono">
+                        · {card.lemma}
+                      </span>
                     </div>
 
-                    <p className="text-xs font-medium text-amber-800 dark:text-amber-400 mb-1">
+                    <p className="text-xs font-medium text-[#9A3412] dark:text-[#D97706] mb-1">
                       {card.translation}
                     </p>
 
-                    <p className="text-xs text-stone-500 font-reader italic truncate">
+                    <p className="text-xs text-[#71717A] dark:text-[#A1A1AA] font-reader italic truncate">
                       "{card.contextSentence}"
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-xs font-mono text-stone-400">
-                      Lvl {card.masteryLevel}/5
+                  <div className="flex items-center gap-4 shrink-0">
+                    <span className="text-[11px] font-mono text-[#71717A] dark:text-[#A1A1AA]">
+                      {card.masteryLevel}/5
                     </span>
                     <button
                       onClick={() => handleDeleteCard(card.id)}
                       title="Remove from deck"
-                      className="p-1.5 text-stone-400 hover:text-red-600 transition-colors cursor-pointer"
+                      className="p-1 text-[#71717A] hover:text-red-600 transition-colors cursor-pointer"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>

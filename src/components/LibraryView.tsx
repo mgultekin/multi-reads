@@ -1,21 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
-  BookOpen,
-  Plus,
   Loader2,
   ArrowRight,
   Trash2,
-  Bookmark,
-  Globe,
-  Newspaper,
   RefreshCw,
-  Sparkles,
-  Flame,
-  Calendar,
   ExternalLink,
   Download,
   Check,
+  Plus,
 } from 'lucide-react';
 import { ContentItem, DailyNewsEdition, GenreId, LanguageCode } from '../types/index.ts';
 import { GENRES, SUPPORTED_LANGUAGES } from '../data/constants.ts';
@@ -131,7 +124,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     }
   };
 
-  // Auto-populate Gutenberg or Wikipedia tabs when clicked if empty for current language
   const handleSelectSource = async (
     nextSource: 'all' | 'news' | 'novels' | 'curated' | 'gutenberg' | 'wikipedia' | 'custom'
   ) => {
@@ -176,7 +168,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       await loadBooks();
       setInsertNotice({
         bookId: updated.id,
-        message: `Inserted ${updated.chunks.length} chapters!`,
+        message: `Inserted ${updated.chunks.length} chapters`,
       });
       setTimeout(() => {
         setInsertNotice((prev) => (prev?.bookId === updated.id ? null : prev));
@@ -212,7 +204,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     if (activeSource !== 'news') {
       return books;
     }
-    // For 'news' view: combine any stored 'news' books with all stories from dailyEdition, deduplicating by ID
     const map = new Map<string, ContentItem>();
     for (const story of allStoriesFromEdition) {
       map.set(story.id, story);
@@ -248,7 +239,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         : activeSource === 'curated'
         ? book.source === 'gutenberg' && !isDynamicGutenberg && !book.isFullNovel
         : activeSource === 'gutenberg'
-        ? book.source === 'gutenberg' && (isDynamicGutenberg || !books.some((b) => b.language === targetLang && b.id.startsWith('gutenberg-search-')))
+        ? book.source === 'gutenberg' &&
+          (isDynamicGutenberg || !books.some((b) => b.language === targetLang && b.id.startsWith('gutenberg-search-')))
         : activeSource === 'wikipedia'
         ? book.source === 'wikipedia'
         : book.source === 'custom';
@@ -269,392 +261,305 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     return acc;
   }, {} as Record<string, number>);
 
+  const sourceTabs = [
+    { id: 'all', label: 'All' },
+    { id: 'news', label: 'Daily Press' },
+    { id: 'novels', label: 'Full Novels' },
+    { id: 'curated', label: 'Classics' },
+    { id: 'gutenberg', label: 'Gutenberg' },
+    { id: 'wikipedia', label: 'Wiki' },
+    { id: 'custom', label: 'Imported' },
+  ] as const;
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-      {/* Streamlined Header + Continue Reading Strip */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5 pb-4 border-b border-stone-200/80 dark:border-stone-800/80">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      {/* Minimal Header + Continue Reading + Import Link */}
+      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-4 pb-6 border-b border-stone-200 dark:border-stone-800">
         <div className="flex items-baseline gap-3 flex-wrap">
-          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#18181B] dark:text-[#F4F4F5]">
             {currentLangInfo.name} Library
           </h1>
-          <span className="text-xs font-serif italic text-stone-500 dark:text-stone-400">
-            Daily press dispatches, public domain classics, Wikipedia articles & custom manuscripts
+          <span className="text-xs font-serif italic text-[#71717A] dark:text-[#A1A1AA]">
+            Classics, complete novels & morning dispatches
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-4 text-xs">
           {continueReadingBook && (
             <button
               onClick={() => handleSelectAndPersistBook(continueReadingBook)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100/80 dark:hover:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/60 rounded-lg text-xs text-amber-900 dark:text-amber-300 transition-colors cursor-pointer max-w-xs sm:max-w-sm"
+              className="inline-flex items-center gap-1.5 text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer max-w-xs"
             >
-              <Bookmark className="w-3.5 h-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
-              <span className="truncate font-medium">
-                Resume <strong className="font-semibold">{continueReadingBook.title}</strong> ({(continueReadingBook.currentChunkIndex || 0) + 1}/{continueReadingBook.chunks.length})
+              <span className="truncate">
+                Resume <em className="font-serif text-[#18181B] dark:text-[#F4F4F5]">{continueReadingBook.title}</em>{' '}
+                <span className="font-mono text-[11px]">
+                  ({(continueReadingBook.currentChunkIndex || 0) + 1}/{continueReadingBook.chunks.length})
+                </span>
               </span>
-              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+              <ArrowRight className="w-3.5 h-3.5 shrink-0 text-[#9A3412] dark:text-[#D97706]" />
             </button>
           )}
 
           <button
             onClick={onOpenImporter}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 font-medium text-[#18181B] dark:text-[#F4F4F5] hover:text-[#9A3412] dark:hover:text-[#D97706] border-b border-stone-300 dark:border-stone-700 hover:border-[#9A3412] dark:hover:border-[#D97706] pb-0.5 transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            Import Text / RSS / EPUB
+            <span>Import</span>
           </button>
         </div>
       </div>
 
-      {/* "The Morning Espresso" Broadsheet Card */}
+      {/* Slim Borderless Broadsheet Masthead Strip */}
       {(activeSource === 'all' || activeSource === 'news') && (dailyEdition || isLoadingDailyNews) && (
         <section
           aria-label="Daily News Edition"
-          className="mb-8 rounded-2xl border border-stone-300/80 dark:border-stone-800 bg-[#FDFBF7] dark:bg-[#1C1A17] text-stone-900 dark:text-stone-100 shadow-xs overflow-hidden"
+          className="py-5 border-b border-stone-200 dark:border-stone-800"
         >
-          {/* Newspaper Masthead */}
-          <div className="px-5 py-4 border-b border-stone-200 dark:border-stone-800 bg-stone-100/70 dark:bg-stone-900/50">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-900 text-amber-100 dark:bg-amber-800 dark:text-amber-100 shrink-0">
-                  <Newspaper className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-amber-800 dark:text-amber-400 font-semibold">
-                      The Daily Folio · 6-Hour Temporal Slot
-                    </span>
-                    <span className="text-stone-300 dark:text-stone-700">|</span>
-                    <span className="text-xs text-stone-500 dark:text-stone-400">
-                      {dailyEdition?.date || new Date().toISOString().split('T')[0]}
-                    </span>
-                    {dailyEdition?.leadStory?.license && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-200/70 dark:bg-stone-800 text-stone-600 dark:text-stone-300">
-                        {dailyEdition.leadStory.license}
-                      </span>
-                    )}
-                  </div>
-                  <h2 className="font-display text-lg sm:text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
-                    {dailyEdition?.editionTitle || `${currentLangInfo.name} Morning Press`}
-                  </h2>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 self-start sm:self-auto">
-                <button
-                  onClick={() => loadDailyNews(true)}
-                  disabled={isLoadingDailyNews}
-                  title="Refresh morning edition"
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white bg-white dark:bg-stone-800/80 hover:bg-stone-50 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg transition-colors cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingDailyNews ? 'animate-spin text-amber-600' : ''}`} />
-                  <span className="text-[11px] font-medium">{isLoadingDailyNews ? 'Refreshing...' : 'Refresh Edition'}</span>
-                </button>
-              </div>
+          {/* 1-Line Masthead */}
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-[#71717A] dark:text-[#A1A1AA] mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="uppercase tracking-widest font-semibold text-[#9A3412] dark:text-[#D97706]">
+                {dailyEdition?.editionTitle || `${currentLangInfo.name} Morning Press`}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>{dailyEdition?.date || new Date().toISOString().split('T')[0]}</span>
+              {dailyEdition?.leadStory?.license && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>{dailyEdition.leadStory.license}</span>
+                </>
+              )}
             </div>
+
+            <button
+              onClick={() => loadDailyNews(true)}
+              disabled={isLoadingDailyNews}
+              title="Refresh morning edition"
+              className="inline-flex items-center gap-1 text-[11px] font-sans text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
+            >
+              <RefreshCw className={`w-3 h-3 ${isLoadingDailyNews ? 'animate-spin text-[#9A3412] dark:text-[#D97706]' : ''}`} />
+              <span>{isLoadingDailyNews ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
           </div>
 
-          {/* Broadsheet Content: Lead Story & Sidebar */}
           {isLoadingDailyNews && !dailyEdition ? (
-            <div className="py-12 text-center">
-              <Loader2 className="w-6 h-6 animate-spin mx-auto text-amber-600 mb-2" />
-              <p className="text-xs font-serif italic text-stone-500">
-                Gathering dispatch from Global Voices & Wikimedia in {currentLangInfo.name}...
-              </p>
+            <div className="py-6 flex items-center gap-2 text-xs font-serif italic text-[#71717A] dark:text-[#A1A1AA]">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#9A3412] dark:text-[#D97706]" />
+              <span>Gathering morning dispatches in {currentLangInfo.name}...</span>
             </div>
           ) : dailyEdition ? (
-            <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-stone-200 dark:divide-stone-800">
-              {/* Left Column: Lead Cultural Story (8 cols) */}
-              <div className="lg:col-span-8 p-6 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60">
-                      Lead Cultural Story
-                    </span>
-                    <span className="text-xs text-stone-400 font-mono">
-                      {dailyEdition.leadStory.estimatedReadTimeMinutes} min read · {dailyEdition.leadStory.wordCount} words
-                    </span>
-                  </div>
-
-                  <h3
-                    onClick={() => handleSelectAndPersistBook(dailyEdition.leadStory)}
-                    className="font-display text-xl sm:text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100 hover:text-amber-800 dark:hover:text-amber-400 transition-colors cursor-pointer leading-snug mb-2"
-                  >
-                    {dailyEdition.leadStory.title}
-                  </h3>
-
-                  <p className="font-serif italic text-xs text-stone-500 dark:text-stone-400 mb-3">
-                    Reported by {dailyEdition.leadStory.author}
+            <div className="space-y-3">
+              {/* Lead Story Title & Compact 2-Line Summary */}
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="max-w-3xl">
+                  <div className="flex items-baseline gap-2 flex-wrap mb-1">
+                    <h2
+                      onClick={() => handleSelectAndPersistBook(dailyEdition.leadStory)}
+                      className="font-display text-xl sm:text-2xl font-bold tracking-tight text-[#18181B] dark:text-[#F4F4F5] hover:text-[#9A3412] dark:hover:text-[#D97706] transition-colors cursor-pointer leading-snug"
+                    >
+                      {dailyEdition.leadStory.title}
+                    </h2>
                     {dailyEdition.leadStory.sourceUrl && (
                       <a
                         href={dailyEdition.leadStory.sourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="ml-2 inline-flex items-center text-stone-400 hover:text-amber-700 transition-colors"
-                        title="Source article"
+                        className="text-[#71717A] hover:text-[#9A3412] dark:hover:text-[#D97706] transition-colors"
+                        title="Original source article"
                       >
-                        <ExternalLink className="w-3 h-3" />
+                        <ExternalLink className="w-3 h-3 inline" />
                       </a>
                     )}
-                  </p>
-
-                  <p className="font-reader text-xs sm:text-sm text-stone-700 dark:text-stone-300 leading-relaxed line-clamp-3 mb-5">
+                  </div>
+                  <p className="font-reader text-sm text-[#71717A] dark:text-[#A1A1AA] leading-relaxed line-clamp-2">
                     {dailyEdition.leadStory.summary}
                   </p>
+                </div>
 
-                  {/* Preflight Key Vocab Preview Pills */}
-                  {dailyEdition.leadStory.preflightVocab && dailyEdition.leadStory.preflightVocab.length > 0 && (
-                    <div className="mb-5 p-3.5 bg-amber-50/60 dark:bg-amber-950/20 rounded-xl border border-amber-200/60 dark:border-amber-900/40">
-                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-900 dark:text-amber-300 mb-2">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                        <span>Pre-Flight Vocabulary Preview</span>
-                        <span className="text-[10px] font-normal text-amber-700/80 dark:text-amber-400/70 font-serif italic">
-                          (Top {dailyEdition.leadStory.preflightVocab.length} key journalistic words to unlock comprehension)
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {dailyEdition.leadStory.preflightVocab.map((item, idx) => (
-                          <div
-                            key={idx}
-                            className="inline-flex items-baseline gap-1.5 px-2.5 py-1 bg-white dark:bg-stone-900 rounded-lg border border-amber-200 dark:border-amber-800/80 text-xs shadow-2xs"
+                <button
+                  onClick={() => handleSelectAndPersistBook(dailyEdition.leadStory)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#18181B] dark:text-[#F4F4F5] hover:text-[#9A3412] dark:hover:text-[#D97706] border-b border-[#18181B] dark:border-[#F4F4F5] hover:border-[#9A3412] dark:hover:border-[#D97706] pb-0.5 transition-colors cursor-pointer shrink-0 self-start md:self-auto group"
+                >
+                  <span>Read Lead Story</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              </div>
+
+              {/* Inline Muted Pre-Flight Key Terms (Text Only — Zero Pill Boxes) */}
+              {dailyEdition.leadStory.preflightVocab && dailyEdition.leadStory.preflightVocab.length > 0 && (
+                <div className="text-xs text-[#71717A] dark:text-[#A1A1AA] leading-relaxed">
+                  <span className="font-mono text-[10px] uppercase tracking-wider mr-2 text-[#18181B] dark:text-[#F4F4F5]">
+                    Key Terms:
+                  </span>
+                  {dailyEdition.leadStory.preflightVocab.map((item, idx) => (
+                    <React.Fragment key={idx}>
+                      {idx > 0 && <span aria-hidden="true" className="mx-1.5 text-stone-300 dark:text-stone-700">·</span>}
+                      <button
+                        type="button"
+                        onClick={() => handleSelectAndPersistBook(dailyEdition.leadStory)}
+                        className="hover:text-[#9A3412] dark:hover:text-[#D97706] transition-colors cursor-pointer text-left"
+                      >
+                        <span className="font-serif font-medium text-[#18181B] dark:text-[#F4F4F5]">
+                          {item.word}
+                        </span>{' '}
+                        <span className="italic">({item.translation})</span>
+                      </button>
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+
+              {/* Compact 1-Line Trending & On This Day Links */}
+              {(dailyEdition.trendingStories.length > 0 || dailyEdition.onThisDayStory) && (
+                <div className="pt-2.5 border-t border-stone-200/70 dark:border-stone-800/70 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-[#71717A] dark:text-[#A1A1AA]">
+                  {dailyEdition.trendingStories.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-[#9A3412] dark:text-[#D97706]">
+                        Trending:
+                      </span>
+                      {dailyEdition.trendingStories.slice(0, 2).map((story, idx) => (
+                        <React.Fragment key={story.id}>
+                          {idx > 0 && <span aria-hidden="true" className="text-stone-300 dark:text-stone-700">·</span>}
+                          <button
+                            type="button"
+                            onClick={() => handleSelectAndPersistBook(story)}
+                            className="hover:text-[#18181B] dark:hover:text-[#F4F4F5] hover:underline underline-offset-4 transition-colors cursor-pointer truncate max-w-[240px]"
                           >
-                            <span className="font-medium text-stone-900 dark:text-stone-100">{item.word}</span>
-                            <span className="text-[11px] text-stone-500 dark:text-stone-400 font-serif italic">
-                              {item.translation}
-                            </span>
-                            {item.cefrHint && (
-                              <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-semibold">
-                                {item.cefrHint}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                            {story.title}
+                          </button>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  )}
+
+                  {dailyEdition.onThisDayStory && (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-[#18181B] dark:text-[#F4F4F5] shrink-0">
+                        On This Day:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectAndPersistBook(dailyEdition.onThisDayStory!)}
+                        className="hover:text-[#18181B] dark:hover:text-[#F4F4F5] hover:underline underline-offset-4 transition-colors cursor-pointer truncate max-w-[280px]"
+                      >
+                        {dailyEdition.onThisDayStory.title}
+                      </button>
                     </div>
                   )}
                 </div>
-
-                <div className="pt-4 border-t border-stone-200/60 dark:border-stone-800 flex items-center justify-between">
-                  <span className="text-xs font-serif italic text-stone-500 dark:text-stone-400">
-                    Interactive reader with instant word breakdown & CEFR level switcher
-                  </span>
-                  <button
-                    onClick={() => handleSelectAndPersistBook(dailyEdition.leadStory)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer group"
-                  >
-                    <span>Read Lead Story</span>
-                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Right Sidebar: Trending Today + On This Day (4 cols) */}
-              <div className="lg:col-span-4 p-5 bg-stone-50/50 dark:bg-stone-900/30 flex flex-col justify-between gap-5">
-                {/* Trending Today */}
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-stone-800 dark:text-stone-200 pb-2 mb-3 border-b border-stone-200 dark:border-stone-800">
-                    <Flame className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Trending Today</span>
-                  </div>
-
-                  <div className="space-y-3">
-                    {dailyEdition.trendingStories.slice(0, 3).map((story) => (
-                      <div
-                        key={story.id}
-                        onClick={() => handleSelectAndPersistBook(story)}
-                        className="group p-2.5 rounded-lg hover:bg-white dark:hover:bg-stone-800/80 border border-transparent hover:border-stone-200 dark:hover:border-stone-700/80 transition-all cursor-pointer"
-                      >
-                        <h4 className="font-display text-xs font-bold text-stone-900 dark:text-stone-100 group-hover:text-amber-800 dark:group-hover:text-amber-400 line-clamp-2 leading-snug mb-1">
-                          {story.title}
-                        </h4>
-                        <div className="flex items-center justify-between text-[11px] text-stone-400 dark:text-stone-500 font-mono">
-                          <span>{story.estimatedReadTimeMinutes}m read</span>
-                          <span className="flex items-center gap-0.5 text-stone-600 dark:text-stone-300 group-hover:text-amber-700 font-medium font-sans">
-                            Read <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* On This Day In History */}
-                {dailyEdition.onThisDayStory && (
-                  <div className="pt-4 border-t border-stone-200 dark:border-stone-800">
-                    <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-stone-800 dark:text-stone-200 pb-2 mb-2">
-                      <Calendar className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
-                      <span>On This Day</span>
-                    </div>
-                    <div
-                      onClick={() => handleSelectAndPersistBook(dailyEdition.onThisDayStory!)}
-                      className="group p-3 rounded-lg bg-white dark:bg-stone-800 border border-stone-200/80 dark:border-stone-700/70 hover:border-amber-500 transition-all cursor-pointer"
-                    >
-                      <h4 className="font-display text-xs font-bold text-stone-900 dark:text-stone-100 group-hover:text-amber-800 dark:group-hover:text-amber-400 line-clamp-2 mb-1">
-                        {dailyEdition.onThisDayStory.title}
-                      </h4>
-                      <p className="text-[11px] font-reader text-stone-600 dark:text-stone-400 line-clamp-2 mb-2 leading-relaxed">
-                        {dailyEdition.onThisDayStory.summary}
-                      </p>
-                      <div className="flex items-center justify-between text-[10px] text-stone-400 font-mono">
-                        <span>Archival Record</span>
-                        <span className="flex items-center gap-0.5 text-amber-700 dark:text-amber-400 font-semibold font-sans">
-                          Explore <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           ) : null}
         </section>
       )}
 
-      {/* Compact Two-Row Search, Source & Genre Controls */}
-      <div className="space-y-3 mb-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Search Input with explicit Gutenberg search button */}
-          <form onSubmit={handleSearchGutenberg} className="flex items-center gap-2 w-full md:w-96">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
+      {/* Minimal Underlined Source Tabs, Inline Genre Dropdown & Hairline Search */}
+      <div className="py-5 border-b border-stone-200 dark:border-stone-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        {/* Underlined Plain-Text Source Tabs */}
+        <div className="flex items-center gap-5 overflow-x-auto pb-1 lg:pb-0 text-xs">
+          {sourceTabs.map((tab) => {
+            const isActive = activeSource === tab.id;
+            return (
+              <button
+                key={tab.id}
+                data-testid={`source-tab-${tab.id}`}
+                onClick={() => handleSelectSource(tab.id)}
+                className={`whitespace-nowrap pb-1 border-b transition-colors cursor-pointer ${
+                  isActive
+                    ? 'text-[#18181B] dark:text-[#F4F4F5] font-semibold border-[#9A3412] dark:border-[#D97706]'
+                    : 'text-[#71717A] dark:text-[#A1A1AA] border-transparent hover:text-[#18181B] dark:hover:text-[#F4F4F5]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Quiet Genre Dropdown + Minimal Search Underline + Contextual Refresh */}
+        <div className="flex flex-wrap items-center gap-4 text-xs">
+          <div className="flex items-center gap-1.5 text-[#71717A] dark:text-[#A1A1AA]">
+            <span>Genre:</span>
+            <select
+              aria-label="Filter by genre"
+              value={selectedGenre}
+              onChange={(e) => setSelectedGenre(e.target.value as GenreId | 'all')}
+              className="bg-transparent font-medium text-[#18181B] dark:text-[#F4F4F5] hover:text-[#9A3412] dark:hover:text-[#D97706] focus:outline-none cursor-pointer"
+            >
+              <option value="all" className="bg-[#FAF8F4] dark:bg-[#141312]">
+                All ({displayBooks.filter((b) => b.language === targetLang).length})
+              </option>
+              {GENRES.map((genre) => {
+                const count = genreCounts[genre.id] || 0;
+                return (
+                  <option key={genre.id} value={genre.id} className="bg-[#FAF8F4] dark:bg-[#141312]">
+                    {genre.label.split('&')[0].trim()} {count > 0 ? `(${count})` : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          <form onSubmit={handleSearchGutenberg} className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#71717A] dark:text-[#A1A1AA]" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Filter library or press Enter for Gutenberg...`}
-                className="w-full pl-9 pr-3 py-2 text-xs bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:border-amber-600 dark:focus:border-amber-500 transition-colors"
+                placeholder="Filter or search Gutenberg..."
+                className="w-48 sm:w-56 pl-5 pr-2 py-1 text-xs bg-transparent border-b border-stone-200 dark:border-stone-800 text-[#18181B] dark:text-[#F4F4F5] placeholder-[#71717A] dark:placeholder-[#A1A1AA] focus:outline-none focus:border-[#9A3412] dark:focus:border-[#D97706] transition-colors"
               />
             </div>
             {searchQuery.trim().length > 0 && (
               <button
                 type="submit"
                 disabled={isFetchingExternal}
-                className="px-3 py-2 bg-amber-700 hover:bg-amber-800 text-white text-xs font-medium rounded-lg transition-colors cursor-pointer shrink-0"
+                className="text-xs font-medium text-[#9A3412] dark:text-[#D97706] hover:underline cursor-pointer shrink-0"
               >
-                {isFetchingExternal ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Gutenberg'}
+                {isFetchingExternal ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Gutenberg →'}
               </button>
             )}
           </form>
-
-          {/* 7-Option Source Segmented Control */}
-          <div className="flex items-center p-1 bg-stone-100 dark:bg-stone-900 rounded-lg border border-stone-200/60 dark:border-stone-800/60 w-full md:w-auto overflow-x-auto">
-            {(
-              [
-                { id: 'all', label: 'All' },
-                { id: 'news', label: 'Daily Press' },
-                { id: 'novels', label: 'Full Novels' },
-                { id: 'curated', label: 'Curated Classics' },
-                { id: 'gutenberg', label: 'Gutenberg' },
-                { id: 'wikipedia', label: 'Wikipedia' },
-                { id: 'custom', label: 'Imported' },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                data-testid={`source-tab-${tab.id}`}
-                onClick={() => handleSelectSource(tab.id)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors cursor-pointer ${
-                  activeSource === tab.id
-                    ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-xs'
-                    : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Single-Line Compact Genre Pill Bar */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-            <button
-              onClick={() => setSelectedGenre('all')}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border transition-colors cursor-pointer ${
-                selectedGenre === 'all'
-                  ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100'
-                  : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800 hover:border-amber-500/60'
-              }`}
-            >
-              All Genres ({displayBooks.filter((b) => b.language === targetLang).length})
-            </button>
-
-            {GENRES.map((genre) => {
-              const isSelected = selectedGenre === genre.id;
-              const count = genreCounts[genre.id] || 0;
-              return (
-                <button
-                  key={genre.id}
-                  onClick={() => setSelectedGenre(genre.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border transition-colors cursor-pointer ${
-                    isSelected
-                      ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100'
-                      : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800 hover:border-amber-500/60'
-                  }`}
-                >
-                  {genre.label.split('&')[0].trim()} {count > 0 ? `(${count})` : ''}
-                </button>
-              );
-            })}
-          </div>
 
           {activeSource === 'wikipedia' && (
             <button
               onClick={() => handleLoadWikipedia(selectedGenre)}
               disabled={isFetchingExternal}
-              className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs font-medium rounded-lg hover:bg-amber-100/70 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-[#9A3412] dark:text-[#D97706] hover:underline cursor-pointer"
             >
               {isFetchingExternal ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <Globe className="w-3.5 h-3.5" />
+                <RefreshCw className="w-3 h-3" />
               )}
-              <span>Refresh Wikipedia</span>
-            </button>
-          )}
-
-          {activeSource === 'news' && (
-            <button
-              onClick={() => loadDailyNews(true)}
-              disabled={isLoadingDailyNews}
-              className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs font-medium rounded-lg hover:bg-amber-100/70 transition-colors cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingDailyNews ? 'animate-spin' : ''}`} />
-              <span>Refresh Press</span>
+              <span>Refresh Wiki</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Full Novels Editorial Banner */}
+      {/* Full Novels Rule-Bounded Header */}
       {activeSource === 'novels' && (
         <section
           aria-label="Complete Multi-Chapter Novels"
-          className="mb-6 p-4 sm:p-5 rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+          className="py-4 border-b border-stone-200 dark:border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
         >
-          <div className="flex items-start gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-900 text-emerald-100 dark:bg-emerald-800 shrink-0">
-              <BookOpen className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-display text-base sm:text-lg font-bold text-stone-900 dark:text-stone-100">
-                  Complete Multi-Chapter Novels (Full Text Inserted)
-                </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
-                  {fullNovelsCountInLang} in {currentLangInfo.name}
-                </span>
-              </div>
-              <p className="text-xs font-serif italic text-stone-600 dark:text-stone-400 mt-0.5">
-                Multi-chapter editions with full continuous prose (8+ chapters) ready for long-form graded reading.
-              </p>
-            </div>
+          <div>
+            <h2 className="font-display text-base font-bold text-[#18181B] dark:text-[#F4F4F5]">
+              Complete Multi-Chapter Novels (Full Text Inserted)
+            </h2>
+            <p className="text-xs font-serif italic text-[#71717A] dark:text-[#A1A1AA]">
+              {fullNovelsCountInLang} full-length {fullNovelsCountInLang === 1 ? 'novel' : 'novels'} available in{' '}
+              {currentLangInfo.name} · 8+ chapters ready for long-form reading
+            </p>
           </div>
 
           <button
             onClick={() => handleSelectSource('gutenberg')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer shrink-0 self-start sm:self-auto"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#9A3412] dark:text-[#D97706] hover:underline cursor-pointer shrink-0 self-start sm:self-auto"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Insert More from Gutenberg</span>
@@ -662,20 +567,19 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </section>
       )}
 
-      {/* Books Grid */}
+      {/* Editorial Book Catalog Grid */}
       {isLoading || isFetchingExternal ? (
         <div className="py-20 text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-amber-600 mb-3" />
-          <p className="text-xs font-serif italic text-stone-500">
+          <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#9A3412] dark:text-[#D97706] mb-3" />
+          <p className="text-xs font-serif italic text-[#71717A] dark:text-[#A1A1AA]">
             {isFetchingExternal
               ? `Fetching ${activeSource === 'wikipedia' ? 'Wikipedia articles' : 'Project Gutenberg catalog'} in ${currentLangInfo.name}...`
               : 'Loading your library...'}
           </p>
         </div>
       ) : filteredBooks.length === 0 ? (
-        <div className="py-16 text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-2xl p-8">
-          <BookOpen className="w-9 h-9 mx-auto text-stone-400 mb-3 stroke-[1.5]" />
-          <h3 className="font-display text-lg font-bold text-stone-800 dark:text-stone-200 mb-1">
+        <div className="py-16 text-center border-b border-stone-200 dark:border-stone-800">
+          <h3 className="font-display text-lg font-bold text-[#18181B] dark:text-[#F4F4F5] mb-1">
             {activeSource === 'news'
               ? 'No press dispatches available for this language yet'
               : activeSource === 'novels'
@@ -684,28 +588,28 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               ? 'No imported manuscripts match this filter yet'
               : 'No readings match this filter yet'}
           </h3>
-          <p className="text-stone-500 text-xs max-w-sm mx-auto mb-5">
+          <p className="text-[#71717A] dark:text-[#A1A1AA] text-xs max-w-sm mx-auto mb-5 font-serif italic">
             {activeSource === 'news'
-              ? "Refresh today's Morning Edition or import any custom RSS/Atom news feed."
+              ? "Refresh today's Morning Edition or import a custom RSS/Atom feed."
               : activeSource === 'novels'
               ? `Reset genre filters or browse Project Gutenberg to insert full multi-chapter novels in ${currentLangInfo.name}.`
               : activeSource === 'custom'
               ? 'Import your own .epub, .txt, .md file, or paste any article.'
               : `Fetch public domain books or encyclopedic articles in ${currentLangInfo.name}.`}
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-5 text-xs font-medium">
             {activeSource === 'news' ? (
               <>
                 <button
                   onClick={() => loadDailyNews(true)}
                   disabled={isLoadingDailyNews}
-                  className="px-4 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+                  className="text-[#18181B] dark:text-[#F4F4F5] border-b border-[#18181B] dark:border-[#F4F4F5] pb-0.5 hover:text-[#9A3412] dark:hover:text-[#D97706] hover:border-[#9A3412] cursor-pointer"
                 >
-                  {isLoadingDailyNews ? 'Refreshing Edition...' : 'Refresh Morning Edition'}
+                  {isLoadingDailyNews ? 'Refreshing...' : 'Refresh Morning Edition'}
                 </button>
                 <button
                   onClick={onOpenImporter}
-                  className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                  className="text-[#9A3412] dark:text-[#D97706] hover:underline cursor-pointer"
                 >
                   Import Custom RSS Feed
                 </button>
@@ -713,7 +617,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             ) : activeSource === 'custom' ? (
               <button
                 onClick={onOpenImporter}
-                className="px-4 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+                className="text-[#18181B] dark:text-[#F4F4F5] border-b border-[#18181B] dark:border-[#F4F4F5] pb-0.5 hover:text-[#9A3412] cursor-pointer"
               >
                 Import EPUB, RSS or Text
               </button>
@@ -721,13 +625,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <>
                 <button
                   onClick={() => handleSearchGutenberg(undefined, selectedGenre !== 'all' ? selectedGenre : '')}
-                  className="px-4 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+                  className="text-[#18181B] dark:text-[#F4F4F5] border-b border-[#18181B] dark:border-[#F4F4F5] pb-0.5 hover:text-[#9A3412] cursor-pointer"
                 >
                   Browse Gutenberg ({currentLangInfo.name})
                 </button>
                 <button
                   onClick={() => handleLoadWikipedia(selectedGenre)}
-                  className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                  className="text-[#9A3412] dark:text-[#D97706] hover:underline cursor-pointer"
                 >
                   Fetch Wikipedia Articles
                 </button>
@@ -736,7 +640,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
           {filteredBooks.map((book) => {
             const genre = GENRES.find((g) => g.id === book.genre);
             const isFull = isBookFullNovel(book);
@@ -756,66 +660,56 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             const hasProgress = (book.currentChunkIndex || 0) > 0;
 
             return (
-              <div
+              <article
                 key={book.id}
                 onClick={() => handleSelectAndPersistBook(book)}
-                className="group flex flex-col justify-between p-5 bg-white dark:bg-[#1C1A18] rounded-xl border border-stone-200/80 dark:border-stone-800/80 hover:border-amber-600/50 dark:hover:border-amber-500/50 shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer"
+                className="group flex flex-col justify-between py-6 border-b border-stone-200 dark:border-stone-800 cursor-pointer transition-colors"
               >
                 <div>
-                  <div className="flex items-center justify-between gap-2 text-[11px] text-stone-400 dark:text-stone-500 mb-2">
+                  <div className="flex items-center justify-between gap-2 text-[11px] font-mono text-[#71717A] dark:text-[#A1A1AA] mb-2">
                     <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                      <span className="font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-400">
+                      <span className="uppercase tracking-wider text-[#9A3412] dark:text-[#D97706]">
                         {genre?.label.split('&')[0].trim() || 'Literature'}
                       </span>
                       <span aria-hidden="true">·</span>
-                      <span>{book.estimatedReadTimeMinutes} min</span>
+                      <span>
+                        {isFull
+                          ? `FULL NOVEL · ${book.chunks.length} CHAPTERS`
+                          : `${book.chunks.length} ${book.chunks.length === 1 ? 'sec' : 'ch'}`}
+                      </span>
                       <span aria-hidden="true">·</span>
-                      <span className="capitalize">{book.source === 'news' ? 'Daily Press' : book.source}</span>
-                      {book.license && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span className="text-[10px] font-mono">{book.license}</span>
-                        </>
-                      )}
+                      <span>{book.estimatedReadTimeMinutes} min</span>
                     </div>
 
                     {isRemovable && (
                       <button
                         onClick={(e) => handleDeleteBook(e, book.id)}
                         title="Remove from library"
-                        className="p-1 text-stone-400 hover:text-red-600 transition-colors cursor-pointer"
+                        className="p-0.5 text-[#71717A] dark:text-[#A1A1AA] hover:text-red-600 transition-colors cursor-pointer opacity-60 group-hover:opacity-100"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
 
-                  {isFull && (
-                    <div className="mb-2">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60">
-                        FULL NOVEL · {book.chunks.length} CHAPTERS
-                      </span>
-                    </div>
-                  )}
-
-                  <h3 className="font-display text-lg font-bold tracking-tight text-stone-900 dark:text-stone-100 group-hover:text-amber-800 dark:group-hover:text-amber-400 transition-colors mb-1 line-clamp-2">
+                  <h3 className="font-display text-lg font-bold tracking-tight text-[#18181B] dark:text-[#F4F4F5] group-hover:text-[#9A3412] dark:group-hover:text-[#D97706] transition-colors mb-1 line-clamp-2 leading-snug">
                     {book.title}
                   </h3>
 
-                  <p className="font-serif italic text-xs text-stone-500 dark:text-stone-400 mb-2.5">
+                  <p className="font-serif italic text-xs text-[#71717A] dark:text-[#A1A1AA] mb-2.5">
                     by {book.author}
                   </p>
 
-                  <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-2 mb-4">
+                  <p className="text-xs text-[#71717A] dark:text-[#A1A1AA] leading-relaxed line-clamp-2 mb-4">
                     {book.summary}
                   </p>
 
                   {noticeForThis && (
                     <div
-                      className={`mb-3 px-2.5 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 ${
+                      className={`mb-2 text-[11px] font-medium flex items-center gap-1 ${
                         noticeForThis.isError
-                          ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
-                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                          ? 'text-red-600 dark:text-red-400'
+                          : 'text-[#9A3412] dark:text-[#D97706]'
                       }`}
                     >
                       {!noticeForThis.isError && <Check className="w-3 h-3 shrink-0" />}
@@ -824,21 +718,21 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   )}
                 </div>
 
-                <div className="pt-3 border-t border-stone-100 dark:border-stone-800/80 flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-mono text-stone-400 dark:text-stone-500 truncate">
+                <div className="flex items-center justify-between gap-2 pt-1 text-xs">
+                  <span className="text-[11px] font-mono text-[#71717A] dark:text-[#A1A1AA] truncate">
                     {hasProgress
                       ? `Sec ${(book.currentChunkIndex || 0) + 1}/${book.chunks.length} · ${book.wordCount}w`
-                      : `${book.chunks.length} section${book.chunks.length === 1 ? '' : 's'} · ${book.wordCount} words`}
+                      : `${book.wordCount} words`}
                   </span>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0">
                     {canInsertFullNovel && (
                       <button
                         type="button"
                         data-testid="insert-full-novel-btn"
                         disabled={Boolean(insertingNovelId)}
                         onClick={(e) => handleInsertFullNovel(e, book)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-[#71717A] dark:text-[#A1A1AA] hover:text-[#9A3412] dark:hover:text-[#D97706] border-b border-stone-300 dark:border-stone-700 hover:border-[#9A3412] transition-colors cursor-pointer disabled:opacity-50"
                       >
                         {isInsertingThis ? (
                           <>
@@ -854,13 +748,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       </button>
                     )}
 
-                    <span className="flex items-center gap-1.5 text-xs font-semibold text-stone-900 dark:text-stone-100 group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors">
+                    <span className="inline-flex items-center gap-1 font-medium text-[#18181B] dark:text-[#F4F4F5] group-hover:text-[#9A3412] dark:group-hover:text-[#D97706] transition-colors">
                       {hasProgress ? 'Resume' : 'Read'}
                       <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                     </span>
                   </div>
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
