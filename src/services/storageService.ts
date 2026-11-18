@@ -1,5 +1,8 @@
-import { ContentItem, Flashcard, LanguageCode, ReadingLogEntry, UserProfile } from '../types/index.ts';
+import { ContentItem, DailyNewsEdition, Flashcard, LanguageCode, ReadingLogEntry, UserProfile } from '../types/index.ts';
 import { INITIAL_CURATED_BOOKS } from '../data/constants.ts';
+import { INITIAL_FULL_NOVELS } from '../data/fullNovelsData.ts';
+
+const ALL_BUNDLED_BOOKS: ContentItem[] = [...INITIAL_CURATED_BOOKS, ...INITIAL_FULL_NOVELS];
 import {
   INSTANT_LEXICON,
   LexiconEntry,
@@ -79,6 +82,55 @@ class StorageService {
     return this.dbPromise;
   }
 
+  private reconcileCuratedBooks(books: ContentItem[]): { reconciled: ContentItem[]; changed: boolean } {
+    const byId = new Map<string, ContentItem>();
+    for (const b of books) {
+      byId.set(b.id, b);
+    }
+
+    let changed = false;
+    const upgraded: ContentItem[] = [];
+
+    // Ensure every curated book and pre-bundled full novel exists and has full multi-chapter chunks
+    for (const curated of ALL_BUNDLED_BOOKS) {
+      const existing = byId.get(curated.id);
+      if (!existing) {
+        upgraded.push(curated);
+        changed = true;
+      } else {
+        byId.delete(curated.id);
+        if ((existing.chunks?.length || 0) < curated.chunks.length) {
+          upgraded.push({
+            ...curated,
+            currentChunkIndex: Math.min(existing.currentChunkIndex || 0, curated.chunks.length - 1),
+            lastReadAt: existing.lastReadAt,
+            cefrCache: existing.cefrCache,
+          });
+          changed = true;
+        } else if (
+          (curated.isFullNovel && !existing.isFullNovel) ||
+          (curated.gutenbergId !== undefined && existing.gutenbergId === undefined)
+        ) {
+          upgraded.push({
+            ...existing,
+            isFullNovel: curated.isFullNovel ?? existing.isFullNovel,
+            gutenbergId: curated.gutenbergId ?? existing.gutenbergId,
+          });
+          changed = true;
+        } else {
+          upgraded.push(existing);
+        }
+      }
+    }
+
+    // Preserve user-imported / dynamic Gutenberg / Wikipedia books
+    for (const remaining of byId.values()) {
+      upgraded.push(remaining);
+    }
+
+    return { reconciled: upgraded, changed };
+  }
+
   // --- BOOKS & ARTICLES ---
   async getBooks(): Promise<ContentItem[]> {
     try {
@@ -89,12 +141,16 @@ class StorageService {
         const req = store.getAll();
 
         req.onsuccess = () => {
-          let books = req.result as ContentItem[];
+          const books = req.result as ContentItem[];
           if (!books || books.length === 0) {
-            this.seedBooks(INITIAL_CURATED_BOOKS);
-            resolve(INITIAL_CURATED_BOOKS);
+            this.seedBooks(ALL_BUNDLED_BOOKS);
+            resolve(ALL_BUNDLED_BOOKS);
           } else {
-            resolve(books);
+            const { reconciled, changed } = this.reconcileCuratedBooks(books);
+            if (changed) {
+              this.seedBooks(reconciled);
+            }
+            resolve(reconciled);
           }
         };
 
@@ -163,12 +219,14 @@ class StorageService {
     try {
       const data = localStorage.getItem('foliolingo_books');
       if (data) {
-        return JSON.parse(data);
+        const parsed = JSON.parse(data) as ContentItem[];
+        const { reconciled } = this.reconcileCuratedBooks(parsed);
+        return reconciled;
       }
     } catch (e) {
       console.warn('localStorage read error', e);
     }
-    return INITIAL_CURATED_BOOKS;
+    return ALL_BUNDLED_BOOKS;
   }
 
   // --- CEFR ADAPTED TEXT CACHING ---
@@ -590,6 +648,38 @@ class StorageService {
 
     this.saveUserProfile(profile);
     return profile;
+  }
+
+  /**
+   * Retrieves cached Daily News Edition for the target language and native base language.
+   * Returns null if missing or expired (Date.now() >= edition.expiresAt).
+   */
+  getCachedDailyNews(lang: LanguageCode, baseLang: string = 'English'): DailyNewsEdition | null {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    try {
+      const raw = localStorage.getItem(`foliolingo_daily_news_${lang}_${baseLang}`);
+      if (!raw) return null;
+      const edition: DailyNewsEdition = JSON.parse(raw);
+      if (!edition || typeof edition.expiresAt !== 'number' || Date.now() >= edition.expiresAt) {
+        return null;
+      }
+      return edition;
+    } catch (err) {
+      console.warn('Failed to parse cached daily news:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Persists Daily News Edition to localStorage keyed by target language and native base language.
+   */
+  saveDailyNews(edition: DailyNewsEdition, baseLang: string = 'English'): void {
+    if (typeof window === 'undefined' || !window.localStorage || !edition?.language) return;
+    try {
+      localStorage.setItem(`foliolingo_daily_news_${edition.language}_${baseLang}`, JSON.stringify(edition));
+    } catch (err) {
+      console.warn('Failed to save daily news to localStorage:', err);
+    }
   }
 }
 

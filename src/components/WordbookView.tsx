@@ -8,10 +8,14 @@ import {
   Edit3,
   Download,
   SkipForward,
+  Plus,
+  RotateCw,
+  Sparkles,
 } from 'lucide-react';
 import { Flashcard, LanguageCode } from '../types/index.ts';
 import { SUPPORTED_LANGUAGES } from '../data/constants.ts';
 import { storageService } from '../services/storageService.ts';
+import { INSTANT_LEXICON } from '../services/instantLexicon.ts';
 
 interface WordbookViewProps {
   targetLang: LanguageCode;
@@ -33,6 +37,10 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
   const [fillFeedback, setFillFeedback] = useState<'idle' | 'correct' | 'incorrect'>('idle');
   const [revealedHintLetters, setRevealedHintLetters] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [newWord, setNewWord] = useState('');
+  const [newTranslation, setNewTranslation] = useState('');
+  const [newSentence, setNewSentence] = useState('');
 
   const activeLangInfo = SUPPORTED_LANGUAGES.find((l) => l.code === targetLang) || SUPPORTED_LANGUAGES[0];
 
@@ -120,14 +128,17 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
     }
   };
 
-  // Keyboard shortcuts for 3D Flip Deck (1/2/3 to grade Hard/Good/Easy when flipped)
+  // Keyboard shortcuts for Flip Deck (Space to flip; 1/2/3 to grade Hard/Good/Easy when flipped)
   useEffect(() => {
     if (practiceMode !== 'flip' || !currentCard) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName)) return;
 
-      if (isFlipped) {
+      if (e.key === ' ') {
+        e.preventDefault();
+        setIsFlipped((prev) => !prev);
+      } else if (isFlipped) {
         if (e.key === '1') {
           e.preventDefault();
           handleScoreCard('hard');
@@ -143,6 +154,78 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [practiceMode, currentCard, isFlipped, safeIndex, filteredDeck.length]);
+
+  const handleLoadStarterWords = async () => {
+    const langDict = INSTANT_LEXICON[targetLang] || INSTANT_LEXICON.es;
+    const baseLangName = storageService.getUserProfile().nativeLanguage || 'English';
+    const entries = Object.entries(langDict)
+      .filter(([_w, e]) => e.pos !== 'Article' && e.pos !== 'Preposition' && e.pos !== 'Conjunction')
+      .slice(0, 5);
+
+    const createdCards: Flashcard[] = [];
+    for (const [idx, [word, entry]] of entries.entries()) {
+      const card: Flashcard = {
+        id: `starter-${targetLang}-${Date.now()}-${idx}`,
+        word,
+        lemma: entry.lemma,
+        partOfSpeech: entry.pos,
+        morphology: entry.morph,
+        translation: entry.translations[baseLangName] || entry.translations.English || Object.values(entry.translations)[0] || word,
+        contextSentence: `${word.charAt(0).toUpperCase() + word.slice(1)} (${entry.pos.toLowerCase()})`,
+        sentenceTranslation: `Starter vocabulary from ${activeLangInfo.name} core lexicon.`,
+        language: targetLang,
+        genre: 'philosophy',
+        bookTitle: 'Core Literary Lexicon',
+        createdAt: Date.now() - idx,
+        nextReviewAt: Date.now(),
+        reviewCount: 0,
+        easeFactor: 2.5,
+        masteryLevel: 0,
+      };
+      await storageService.saveFlashcard(card);
+      createdCards.push(card);
+    }
+
+    setCards((prev) => [...createdCards, ...prev]);
+    setCurrentIndex(0);
+    setIsFlipped(false);
+  };
+
+  const handleCreateCustomCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanWord = newWord.trim();
+    const cleanTrans = newTranslation.trim();
+    if (!cleanWord || !cleanTrans) return;
+
+    const card: Flashcard = {
+      id: `custom-card-${Date.now()}`,
+      word: cleanWord,
+      lemma: cleanWord.toLowerCase(),
+      partOfSpeech: 'Vocabulary',
+      morphology: 'Custom card',
+      translation: cleanTrans,
+      contextSentence: newSentence.trim() || `${cleanWord}`,
+      sentenceTranslation: newSentence.trim() ? cleanTrans : `Meaning: ${cleanTrans}`,
+      language: targetLang,
+      genre: 'fiction',
+      bookTitle: 'Personal Wordbook',
+      createdAt: Date.now(),
+      nextReviewAt: Date.now(),
+      reviewCount: 0,
+      easeFactor: 2.5,
+      masteryLevel: 0,
+    };
+
+    await storageService.saveFlashcard(card);
+    setCards((prev) => [card, ...prev]);
+    setNewWord('');
+    setNewTranslation('');
+    setNewSentence('');
+    setIsAddOpen(false);
+    setCurrentIndex(0);
+    setIsFlipped(false);
+    onAwardXP(5);
+  };
 
   // Strip diacritics for forgiving comparison when user types without accents
   const stripAccents = (str: string) =>
@@ -213,7 +296,7 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `foliolingo-wordbook-${targetLang}.csv`);
+    link.setAttribute('download', `foliopress-wordbook-${targetLang}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -230,7 +313,7 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
         cleanTab(`${c.translation} (${c.partOfSpeech} · root: ${c.lemma})`),
         cleanTab(c.contextSentence),
         cleanTab(c.sentenceTranslation),
-        cleanTab(`foliolingo ${targetLang} ${c.genre || 'literature'}`),
+        cleanTab(`foliopress ${targetLang} ${c.genre || 'literature'}`),
       ].join('\t')
     );
     const tsvContent = ['#separator:tab\n#html:false', ...rows].join('\n');
@@ -238,7 +321,7 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `foliolingo-anki-${targetLang}.tsv`);
+    link.setAttribute('download', `foliopress-anki-${targetLang}.tsv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -255,20 +338,85 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
 
   if (cards.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto px-6 py-24 text-center">
-        <BookOpen className="w-12 h-12 mx-auto text-stone-400 mb-4 stroke-[1.5]" />
+      <div className="max-w-xl mx-auto px-6 py-16 text-center">
+        <BookOpen className="w-11 h-11 mx-auto text-stone-400 mb-4 stroke-[1.5]" />
         <h2 className="font-display text-2xl font-bold text-stone-900 dark:text-stone-100 mb-2">
-          Your Wordbook is Pristine
+          No {activeLangInfo.name} Cards Yet
         </h2>
         <p className="text-stone-600 dark:text-stone-400 text-sm max-w-md mx-auto mb-6 font-serif">
-          While reading any literature or news article in the Reader Studio, click any word to see its grammatical breakdown and save it to this spaced repetition deck.
+          Save words directly while reading in the Reader, load 5 essential literary starter words, or add your own custom card below.
         </p>
-        <button
-          onClick={onOpenReader}
-          className="px-5 py-2.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
-        >
-          Open Reader Studio
-        </button>
+
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
+          <button
+            onClick={onOpenReader}
+            className="px-4 py-2.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
+          >
+            Open Reader
+          </button>
+          <button
+            onClick={handleLoadStarterWords}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-700 hover:bg-amber-800 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Load 5 Starter Words
+          </button>
+          <button
+            onClick={() => setIsAddOpen((prev) => !prev)}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 text-xs font-semibold rounded-lg hover:border-amber-600 transition-colors cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Custom Word
+          </button>
+        </div>
+
+        {isAddOpen && (
+          <form
+            onSubmit={handleCreateCustomCard}
+            className="text-left p-5 bg-white dark:bg-[#1C1A18] rounded-xl border border-stone-200 dark:border-stone-800 space-y-3"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                type="text"
+                required
+                value={newWord}
+                onChange={(e) => setNewWord(e.target.value)}
+                placeholder={`${activeLangInfo.name} word`}
+                className="px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100"
+              />
+              <input
+                type="text"
+                required
+                value={newTranslation}
+                onChange={(e) => setNewTranslation(e.target.value)}
+                placeholder="Translation / meaning"
+                className="px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100"
+              />
+            </div>
+            <input
+              type="text"
+              value={newSentence}
+              onChange={(e) => setNewSentence(e.target.value)}
+              placeholder="Optional example sentence"
+              className="w-full px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAddOpen(false)}
+                className="px-3 py-1.5 text-xs text-stone-500 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-1.5 bg-amber-700 text-white text-xs font-semibold rounded-lg cursor-pointer"
+              >
+                Save Card
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     );
   }
@@ -379,12 +527,20 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
           </div>
 
           <button
+            onClick={() => setIsAddOpen((prev) => !prev)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-lg hover:bg-stone-800 dark:hover:bg-white transition-colors cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Word
+          </button>
+
+          <button
             onClick={handleExportCSV}
             title="Export deck to CSV"
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-700 dark:text-stone-300 hover:border-amber-600 transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-amber-700" />
-            Export CSV
+            CSV
           </button>
 
           <button
@@ -393,10 +549,58 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-700 dark:text-stone-300 hover:border-amber-600 transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-amber-700" />
-            Anki TSV
+            Anki
           </button>
         </div>
       </div>
+
+      {isAddOpen && (
+        <form
+          onSubmit={handleCreateCustomCard}
+          className="mb-6 p-4 bg-white dark:bg-[#1C1A18] rounded-xl border border-stone-200 dark:border-stone-800 space-y-3"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <input
+              type="text"
+              required
+              value={newWord}
+              onChange={(e) => setNewWord(e.target.value)}
+              placeholder={`${activeLangInfo.name} word`}
+              className="px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100"
+            />
+            <input
+              type="text"
+              required
+              value={newTranslation}
+              onChange={(e) => setNewTranslation(e.target.value)}
+              placeholder="Translation / meaning"
+              className="px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100"
+            />
+            <input
+              type="text"
+              value={newSentence}
+              onChange={(e) => setNewSentence(e.target.value)}
+              placeholder="Optional context sentence"
+              className="px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setIsAddOpen(false)}
+              className="px-3 py-1.5 text-xs text-stone-500 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-1.5 bg-amber-700 text-white text-xs font-semibold rounded-lg cursor-pointer"
+            >
+              Save Card (+5 XP)
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* SRS Queue Filter Strip (All | Due Now | Mastered) */}
       <div className="flex items-center justify-between gap-4 mb-8">
@@ -568,26 +772,46 @@ export const WordbookView: React.FC<WordbookViewProps> = ({
               </div>
 
               {/* Rating Action Buttons */}
-              <div className="flex items-center justify-between gap-4 mt-6">
-                <button
-                  onClick={() => handleScoreCard(false)}
-                  title="Shortcut: Press 1 when flipped (Hard / Needs Practice)"
-                  className="flex-1 py-3 px-4 rounded-xl border border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-900 text-xs font-semibold text-stone-700 dark:text-stone-300 transition-colors cursor-pointer"
-                >
-                  Needs Practice (+0 XP)
-                </button>
+              <div className="mt-6">
+                {!isFlipped ? (
+                  <button
+                    onClick={() => setIsFlipped(true)}
+                    className="w-full py-3 px-4 rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <RotateCw className="w-4 h-4" />
+                    Reveal Meaning & Grammar [Space]
+                  </button>
+                ) : (
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
+                      onClick={() => handleScoreCard('hard')}
+                      title="Shortcut: Press 1"
+                      className="py-3 px-3 rounded-xl border border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-900 text-xs font-semibold text-stone-700 dark:text-stone-300 transition-colors cursor-pointer"
+                    >
+                      [1] Hard
+                    </button>
 
-                <button
-                  onClick={() => handleScoreCard(true)}
-                  title="Shortcut: Press 2 (Good) or 3 (Easy) when flipped"
-                  className="flex-1 py-3 px-4 rounded-xl bg-amber-700 hover:bg-amber-800 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Check className="w-4 h-4" />
-                  Mastered (+10 XP)
-                </button>
+                    <button
+                      onClick={() => handleScoreCard('good')}
+                      title="Shortcut: Press 2"
+                      className="py-3 px-3 rounded-xl bg-amber-700 hover:bg-amber-800 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      [2] Good (+10 XP)
+                    </button>
+
+                    <button
+                      onClick={() => handleScoreCard('easy')}
+                      title="Shortcut: Press 3"
+                      className="py-3 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                    >
+                      [3] Easy (+15 XP)
+                    </button>
+                  </div>
+                )}
               </div>
               <p className="mt-2.5 text-center text-[11px] font-mono text-stone-400 dark:text-stone-500">
-                Keyboard: Enter/Space to flip · When flipped: [1] Hard · [2] Good (+10 XP) · [3] Easy (+15 XP)
+                Keyboard: Space to flip · When flipped: [1] Hard · [2] Good · [3] Easy
               </p>
             </div>
           )}

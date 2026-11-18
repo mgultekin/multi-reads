@@ -12,4 +12,11 @@ firebase-applet-config.json
 .agents/
 .vscode/
 .idea/
+# Private AI coordination reports, Medium marketing drafts, and strategy notes
+*control_report*
+*medium_*
+*relaunch*
+*distribution_kit*
+task.md
+daily_news_learning_research.md
 

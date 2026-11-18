@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Upload, FileText, Globe, BookOpen, Check, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Upload, FileText, Globe, BookOpen, Check, Loader2, Rss, ArrowRight, Sparkles } from 'lucide-react';
 import { ContentItem, GenreId, LanguageCode } from '../types/index.ts';
 import { GENRES, SUPPORTED_LANGUAGES } from '../data/constants.ts';
 import { contentService } from '../services/contentService.ts';
@@ -19,7 +19,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   targetLang,
   onImportComplete,
 }) => {
-  const [activeTab, setActiveTab] = useState<'paste' | 'file' | 'wiki'>('file');
+  const [activeTab, setActiveTab] = useState<'paste' | 'file' | 'wiki' | 'rss'>('file');
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [selectedLang, setSelectedLang] = useState<LanguageCode>(targetLang);
@@ -29,8 +29,14 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   const [parsedFormat, setParsedFormat] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [wikiTopic, setWikiTopic] = useState('');
+  const [rssUrl, setRssUrl] = useState('');
+  const [importedRssArticles, setImportedRssArticles] = useState<ContentItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedLang(targetLang);
+  }, [targetLang, isOpen]);
 
   if (!isOpen) return null;
 
@@ -75,21 +81,61 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     setError(null);
 
     try {
-      const url = `https://${selectedLang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTopic.trim())}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Could not find Wikipedia topic "${wikiTopic}" in ${selectedLang.toUpperCase()}`);
-
-      const data = await res.json();
-      setTitle(data.title || wikiTopic);
-      setAuthor('Wikipedia');
-      setText(data.extract || '');
+      const article = await contentService.searchAndFetchWikipediaArticle(wikiTopic.trim(), selectedLang);
+      setTitle(article.title);
+      setAuthor('Wikipedia Contributors');
+      setText(article.extract);
       setParsedChapters(undefined);
-      setParsedFormat(null);
+      setParsedFormat(
+        `Wikipedia (${selectedLang.toUpperCase()}) · ${article.extract.split(/\s+/).filter(Boolean).length.toLocaleString()} words ready to import`
+      );
       setActiveTab('paste');
     } catch (err: any) {
       setError(err.message || 'Failed to fetch Wikipedia article.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleFetchRss = async () => {
+    const trimmed = rssUrl.trim();
+    if (!trimmed) {
+      setError('Please provide a valid RSS or Atom feed URL (e.g. https://es.globalvoices.org/feed/).');
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const profile = storageService.getUserProfile();
+      const baseLang = profile.nativeLanguage || 'English';
+      const articles = await contentService.fetchCustomRssFeed(trimmed, selectedLang, baseLang);
+
+      if (!articles || articles.length === 0) {
+        throw new Error('No articles could be extracted from this feed.');
+      }
+
+      // Persist all articles into storage so they show up under the 'news' source tab in Library
+      for (const article of articles) {
+        await storageService.saveBook(article);
+      }
+
+      setImportedRssArticles(articles);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch or parse the external RSS feed.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectRssArticle = (article: ContentItem) => {
+    onImportComplete(article);
+    onClose();
+  };
+
+  const handleOpenFirstRssArticle = () => {
+    if (importedRssArticles.length > 0) {
+      handleSelectRssArticle(importedRssArticles[0]);
     }
   };
 
@@ -121,6 +167,15 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     }
   };
 
+  const sampleRssFeeds: Record<LanguageCode, string> = {
+    es: 'https://es.globalvoices.org/feed/',
+    fr: 'https://fr.globalvoices.org/feed/',
+    de: 'https://de.globalvoices.org/feed/',
+    it: 'https://it.globalvoices.org/feed/',
+    tr: 'https://tr.globalvoices.org/feed/',
+    en: 'https://globalvoices.org/feed/',
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs">
       <div className="w-full max-w-2xl bg-white dark:bg-[#1C1A18] rounded-2xl border border-stone-200 dark:border-stone-800 shadow-2xl p-6 text-stone-900 dark:text-stone-100 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
@@ -128,8 +183,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
           <div>
-            <h2 className="font-display text-xl font-bold">Import EPUB, Manuscript, or Article</h2>
-            <p className="text-xs text-stone-500 font-serif italic">Drop any .epub, .html, .md, or .txt book to parse chapters into an interactive graded reader.</p>
+            <h2 className="font-display text-xl font-bold">Import Manuscript, RSS Feed, or EPUB</h2>
+            <p className="text-xs text-stone-500 font-serif italic">
+              Add books, articles, or external RSS news feeds with automated CEFR leveling and pre-flight vocabulary.
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -140,24 +197,24 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         </div>
 
         {/* Import Mode Tabs */}
-        <div className="flex gap-2 my-4 border-b border-stone-100 dark:border-stone-800 pb-2">
+        <div className="flex gap-2 my-4 border-b border-stone-100 dark:border-stone-800 pb-2 overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab('file')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors whitespace-nowrap ${
               activeTab === 'file'
                 ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
                 : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-900'
             }`}
           >
             <Upload className="w-3.5 h-3.5" />
-            EPUB / File Drop (.epub, .md, .txt)
+            EPUB / File Drop
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('paste')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors whitespace-nowrap ${
               activeTab === 'paste'
                 ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
                 : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-900'
@@ -170,14 +227,27 @@ export const ImportModal: React.FC<ImportModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('wiki')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors whitespace-nowrap ${
               activeTab === 'wiki'
                 ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
                 : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-900'
             }`}
           >
             <Globe className="w-3.5 h-3.5" />
-            Fetch Wikipedia
+            Wikipedia
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('rss')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors whitespace-nowrap ${
+              activeTab === 'rss'
+                ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
+                : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-900'
+            }`}
+          >
+            <Rss className="w-3.5 h-3.5" />
+            RSS News
           </button>
         </div>
 
@@ -250,125 +320,264 @@ export const ImportModal: React.FC<ImportModalProps> = ({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
-                Title
-              </label>
-              <input
-                type="text"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Article or book title"
-                className="w-full px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100 focus:outline-none focus:border-amber-600"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
-                Author
-              </label>
-              <input
-                type="text"
-                value={author}
-                onChange={(e) => setAuthor(e.target.value)}
-                placeholder="Author or publication name"
-                className="w-full px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100 focus:outline-none focus:border-amber-600"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
-                Language
-              </label>
-              <select
-                value={selectedLang}
-                onChange={(e) => setSelectedLang(e.target.value as LanguageCode)}
-                className="w-full px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100 focus:outline-none"
-              >
-                {SUPPORTED_LANGUAGES.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.flag} {l.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
-                Genre Category
-              </label>
-              <select
-                value={genre}
-                onChange={(e) => setGenre(e.target.value as GenreId)}
-                className="w-full px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100 focus:outline-none"
-              >
-                {GENRES.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {parsedChapters && parsedChapters.length > 1 && (
-            <div className="p-3 bg-stone-50 dark:bg-stone-900/60 border border-stone-200/80 dark:border-stone-800 rounded-lg">
-              <div className="text-[11px] font-medium text-stone-600 dark:text-stone-400 mb-1.5">
-                Detected Chapter Spine ({parsedChapters.length} chapters)
+        {/* Tab 4: RSS News Ingestion */}
+        {activeTab === 'rss' && (
+          <div className="space-y-4 mb-4">
+            <div className="p-4 bg-stone-50 dark:bg-stone-900 rounded-xl border border-stone-200/60 dark:border-stone-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                <label className="block text-xs font-medium text-stone-700 dark:text-stone-300">
+                  RSS / Atom News Feed URL ({SUPPORTED_LANGUAGES.find((l) => l.code === selectedLang)?.name}):
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-stone-500">Target:</span>
+                  <select
+                    value={selectedLang}
+                    onChange={(e) => setSelectedLang(e.target.value as LanguageCode)}
+                    className="px-2 py-1 text-xs bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-stone-900 dark:text-stone-100"
+                  >
+                    {SUPPORTED_LANGUAGES.map((l) => (
+                      <option key={l.code} value={l.code}>
+                        {l.flag} {l.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
-                {parsedChapters.map((ch, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-[11px] text-stone-700 dark:text-stone-300">
-                    <span className="truncate">{idx + 1}. {ch.title}</span>
-                    <span className="text-stone-400 shrink-0 ml-2">{ch.wordCount} words</span>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="url"
+                  value={rssUrl}
+                  onChange={(e) => setRssUrl(e.target.value)}
+                  placeholder="e.g. https://es.globalvoices.org/feed/"
+                  className="flex-1 px-3 py-2 text-xs bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg text-stone-900 dark:text-stone-100 focus:outline-none focus:border-amber-600"
+                />
+                <button
+                  type="button"
+                  onClick={handleFetchRss}
+                  disabled={isLoading || !rssUrl.trim()}
+                  className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white text-xs font-medium rounded-lg transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                >
+                  {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Fetch & Ingest Feed'}
+                </button>
+              </div>
+
+              {/* Sample Feed Quick Shortcut */}
+              <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-stone-500">
+                <span className="font-serif italic">Sample feed:</span>
+                <button
+                  type="button"
+                  onClick={() => setRssUrl(sampleRssFeeds[selectedLang] || sampleRssFeeds.en)}
+                  className="text-amber-700 dark:text-amber-400 hover:underline cursor-pointer font-mono"
+                >
+                  {sampleRssFeeds[selectedLang] || sampleRssFeeds.en}
+                </button>
+              </div>
+            </div>
+
+            {/* Display fetched RSS articles */}
+            {importedRssArticles.length > 0 && (
+              <div className="p-4 bg-white dark:bg-[#1E1B18] rounded-xl border border-stone-200 dark:border-stone-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-800 dark:text-stone-200">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Ingested {importedRssArticles.length} News Articles into Library</span>
                   </div>
-                ))}
+                  <button
+                    type="button"
+                    onClick={handleOpenFirstRssArticle}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                  >
+                    <span>Read First Story</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                  {importedRssArticles.map((article) => (
+                    <div
+                      key={article.id}
+                      onClick={() => handleSelectRssArticle(article)}
+                      className="group p-3 rounded-lg bg-stone-50 dark:bg-stone-900/60 hover:bg-amber-50/50 dark:hover:bg-amber-950/20 border border-stone-200/60 dark:border-stone-800 hover:border-amber-500/60 transition-all cursor-pointer flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 text-[10px] text-stone-400 font-mono mb-0.5 flex-wrap">
+                          <span>{article.estimatedReadTimeMinutes} min read</span>
+                          <span>·</span>
+                          <span>{article.wordCount} words</span>
+                          {article.license && (
+                            <>
+                              <span>·</span>
+                              <span className="text-amber-800 dark:text-amber-400">{article.license}</span>
+                            </>
+                          )}
+                          {article.preflightVocab && article.preflightVocab.length > 0 && (
+                            <>
+                              <span>·</span>
+                              <span className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-300">
+                                <Sparkles className="w-2.5 h-2.5" />
+                                {article.preflightVocab.length} key words
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        <h4 className="font-display text-xs font-bold text-stone-900 dark:text-stone-100 group-hover:text-amber-800 dark:group-hover:text-amber-400 truncate">
+                          {article.title}
+                        </h4>
+                        <p className="text-[11px] text-stone-500 dark:text-stone-400 font-serif italic truncate">
+                          by {article.author}
+                        </p>
+                      </div>
+
+                      <span className="flex items-center gap-1 text-xs font-semibold text-stone-700 dark:text-stone-300 group-hover:text-amber-700 shrink-0">
+                        <span>Open</span>
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-3 border-t border-stone-100 dark:border-stone-800">
+              <span className="text-xs font-serif italic text-stone-500">
+                {importedRssArticles.length > 0
+                  ? 'All articles are saved in your library under "Daily Press".'
+                  : 'Enter any valid RSS or Atom feed URL to ingest articles.'}
+              </span>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Regular Form for File, Paste & Wiki imports */}
+        {activeTab !== 'rss' && (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Article or book title"
+                  className="w-full px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100 focus:outline-none focus:border-amber-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
+                  Author
+                </label>
+                <input
+                  type="text"
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  placeholder="Author or publication name"
+                  className="w-full px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100 focus:outline-none focus:border-amber-600"
+                />
               </div>
             </div>
-          )}
 
-          <div>
-            <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
-              Manuscript / Article Content ({selectedLang.toUpperCase()})
-            </label>
-            <textarea
-              required
-              rows={6}
-              value={text}
-              onChange={(e) => {
-                setText(e.target.value);
-                if (activeTab === 'paste') {
-                  setParsedChapters(undefined);
-                  setParsedFormat(null);
-                }
-              }}
-              placeholder="Paste article, newsletter excerpt, or book chapters here..."
-              className="w-full p-3 font-reader text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100 focus:outline-none focus:border-amber-600 leading-relaxed"
-            />
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
+                  Language
+                </label>
+                <select
+                  value={selectedLang}
+                  onChange={(e) => setSelectedLang(e.target.value as LanguageCode)}
+                  className="w-full px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100 focus:outline-none"
+                >
+                  {SUPPORTED_LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.flag} {l.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-stone-100 dark:border-stone-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading || !text.trim()}
-              className="px-5 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-sm disabled:opacity-50 transition-colors cursor-pointer"
-            >
-              {isLoading ? 'Processing...' : 'Save & Open in Reader'}
-            </button>
-          </div>
-        </form>
+              <div>
+                <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
+                  Genre Category
+                </label>
+                <select
+                  value={genre}
+                  onChange={(e) => setGenre(e.target.value as GenreId)}
+                  className="w-full px-3 py-2 text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100 focus:outline-none"
+                >
+                  {GENRES.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {parsedChapters && parsedChapters.length > 1 && (
+              <div className="p-3 bg-stone-50 dark:bg-stone-900/60 border border-stone-200/80 dark:border-stone-800 rounded-lg">
+                <div className="text-[11px] font-medium text-stone-600 dark:text-stone-400 mb-1.5">
+                  Detected Chapter Spine ({parsedChapters.length} chapters)
+                </div>
+                <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
+                  {parsedChapters.map((ch, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-[11px] text-stone-700 dark:text-stone-300">
+                      <span className="truncate">{idx + 1}. {ch.title}</span>
+                      <span className="text-stone-400 shrink-0 ml-2">{ch.wordCount} words</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
+                Manuscript / Article Content ({selectedLang.toUpperCase()})
+              </label>
+              <textarea
+                required
+                rows={6}
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  if (activeTab === 'paste') {
+                    setParsedChapters(undefined);
+                    setParsedFormat(null);
+                  }
+                }}
+                placeholder="Paste article, newsletter excerpt, or book chapters here..."
+                className="w-full p-3 font-reader text-xs bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg text-stone-900 dark:text-stone-100 focus:outline-none focus:border-amber-600 leading-relaxed"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isLoading || !text.trim()}
+                className="px-5 py-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold rounded-lg shadow-xs disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                {isLoading ? 'Processing...' : 'Save & Open in Reader'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📖 FolioLingo (`multi-reads`)
+# 📖 FolioPress (`multi-reads`)
 ### Minimalist Literary Reader & Zero-Latency AI Philology Studio
 
 [![React](https://img.shields.io/badge/React-19.0-61DAFB?logo=react&logoColor=black)](https://react.dev/)
@@ -20,13 +20,13 @@
 
 </div>
 
-## 🌟 Why FolioLingo Exists
+## 🌟 Why FolioPress Exists
 
 Mainstream gamified language apps work well for absolute beginners, but once you reach the **B1 intermediate plateau** (as I experienced while learning **Italian**), synthetic single-sentence drills stop helping. You want to read *real* books—Carlo Collodi's *Le Avventure di Pinocchio*, Niccolò Machiavelli's *Il Principe*, Miguel de Cervantes's *Don Quijote*, Antoine de Saint-Exupéry's *Le Petit Prince*, Franz Kafka's *Die Verwandlung*, or Sait Faik's *Semaver*.
 
 Yet opening an unmodified foreign book creates immediate friction: looking up 10+ inflected verbs or idioms per page in a separate dictionary shatters reading flow, and standard dictionaries fail to explain *why* a word means what it means inside *that specific sentence*.
 
-**FolioLingo (`multi-reads`)** solves this through a **Warm Editorial Bookish Minimalist** reading studio powered by a **4-layer zero-latency philology engine** and audited by a **7-agent AI Swarm Product Squad**.
+**FolioPress (`multi-reads`)** solves this through a **Warm Editorial Bookish Minimalist** reading studio powered by a **4-layer zero-latency philology engine** and audited by a **7-agent AI Swarm Product Squad**.
 
 ---
 
@@ -37,7 +37,7 @@ Yet opening an unmodified foreign book creates immediate friction: looking up 10
 ### 1. 🇮🇹 Italian & World Literature Reader Studio (`ReaderView.tsx`)
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│ 📖 FolioLingo  ·  [Read: 🇮🇹 Italian ▾ → In: 🇬🇧 English / 🇹🇷 Türkçe ▾]   🔥 14d  🛡️ $0/mo │
+│ 📖 FolioPress  ·  [Read: 🇮🇹 Italian ▾ → In: 🇬🇧 English / 🇹🇷 Türkçe ▾]   🔥 14d  🛡️ $0/mo │
 ├──────────────────────────────────────────────────────────────────────────────────────────┤
 │ ← Library · Il Principe (Niccolò Machiavelli)   CEFR: [Orig][A1][A2][B1][B2][C1] [∥ Par] │
 ├──────────────────────────────────────────────────────────────────────────────────────────┤
@@ -89,7 +89,7 @@ Yet opening an unmodified foreign book creates immediate friction: looking up 10
 
 ### 3. 🛡️ Live `$0.00` Free-Tier Guardrail & Quota Monitor (`SettingsModal.tsx` + `costTelemetry.ts`)
 
-FolioLingo is designed for personal study within free-tier limits on the **Firebase Spark Plan** and **Google AI Studio Free Tier**, monitored by an in-app telemetry dashboard and an automatic **80% Circuit Breaker**:
+FolioPress is designed for personal study within free-tier limits on the **Firebase Spark Plan** and **Google AI Studio Free Tier**, monitored by an in-app telemetry dashboard and an automatic **80% Circuit Breaker**:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -121,7 +121,7 @@ FolioLingo is designed for personal study within free-tier limits on the **Fireb
   - **Drag-and-Drop `.epub`, `.md`, `.html`, `.txt` & Wikipedia Importer**: Extracts OPF metadata and chapter spines client-side.
 - **SRS Wordbook, Unicode Cloze & Anki Export (`WordbookView.tsx`)**:
   - Practice saved vocabulary via the **3D Flip Deck** (with `Space`/`Enter` flip and `[1] Hard · [2] Good · [3] Easy` keyboard grading) or **Unicode-Safe Fill-in-the-Blank Cloze** challenges (`(?<![\p{L}])...(?![\p{L}])` supporting `ñ, é, ü, ş, ğ, ç, ß`).
-  - Export your deck in one click to **Anki TSV** (`foliolingo-anki-<lang>.tsv`) or **CSV** (`foliolingo-wordbook-<lang>.csv`).
+  - Export your deck in one click to **Anki TSV** (`foliopress-anki-<lang>.tsv`) or **CSV** (`foliopress-wordbook-<lang>.csv`).
 - **Decoupled Habit Ledger & Scholar League (`SocialLeagueView.tsx`)**:
   - Separates actual literary volume (`wordsReadToday`, `wordsReadThisWeek`, `totalWordsRead`) from bonus XP (`+25 XP` 3-question Section Mastery Quizzes, `+10/+15 XP` flashcard mastery) and logs every completed section to Firestore (`/users/{uid}/reading_logs`).
 
@@ -129,7 +129,7 @@ FolioLingo is designed for personal study within free-tier limits on the **Fireb
 
 ## 🤝 Built & Audited by a 7-Agent AI Swarm in Google Antigravity IDE
 
-FolioLingo (`v0.6.0`–`v0.6.1`) was audited, cross-verified, and upgraded by a **7-agent AI Swarm** orchestrated on a shared message board under human Product Owner direction:
+FolioPress (`v0.6.0`–`v0.6.1`) was audited, cross-verified, and upgraded by a **7-agent AI Swarm** orchestrated on a shared message board under human Product Owner direction:
 
 ```
                         ┌────────────────────────────────────┐
@@ -214,13 +214,13 @@ GEMINI_API_KEY=your_free_tier_gemini_api_key_here
 PORT=3000
 ```
 
-- **Optional Firebase Cloud Sync:** By default, FolioLingo runs 100% locally in your browser (IndexedDB + `localStorage`) with **no Firebase project required**. To enable cross-device Google Sign-In and Firestore sync on your own Firebase project, copy `firebase-applet-config.example.json` to `firebase-applet-config.json` (gitignored) with your own project keys or supply `VITE_FIREBASE_*` environment variables, and deploy `firestore.rules`.
+- **Optional Firebase Cloud Sync:** By default, FolioPress runs 100% locally in your browser (IndexedDB + `localStorage`) with **no Firebase project required**. To enable cross-device Google Sign-In and Firestore sync on your own Firebase project, copy `firebase-applet-config.example.json` to `firebase-applet-config.json` (gitignored) with your own project keys or supply `VITE_FIREBASE_*` environment variables, and deploy `firestore.rules`.
 
 ### 3. Start Development Server
 ```bash
 npm run dev
 ```
-Open `http://localhost:3000` to launch FolioLingo, or open `docs/showcase/index.html` directly to view the interactive visual press kit.
+Open `http://localhost:3000` to launch FolioPress, or open `docs/showcase/index.html` directly to view the interactive visual press kit.
 
 ### Self-Hosting & Security Note
 - `server.ts` is intended for **local or personal use** (enforcing a `100kb` JSON request body cap and per-IP rate limits on `/api/gemini/*` and `/api/gutenberg/*`).

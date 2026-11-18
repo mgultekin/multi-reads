@@ -22,6 +22,7 @@ export default function App() {
   const [isImporterOpen, setIsImporterOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isFocusMode, setIsFocusMode] = useState(false);
 
   // Apply theme to document element
   useEffect(() => {
@@ -99,6 +100,13 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleTabChange = (tab: 'library' | 'reader' | 'wordbook' | 'social') => {
+    if (tab !== 'reader') {
+      setIsFocusMode(false);
+    }
+    setActiveTab(tab);
+  };
+
   const handleRecordWords = async (
     wordsCount: number,
     bookMeta?: { bookId?: string; bookTitle?: string; language?: LanguageCode }
@@ -154,7 +162,7 @@ export default function App() {
       {/* 3-Zone Top Navigation Bar with Dual Language Selectors & Firebase Auth */}
       <Navbar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleTabChange}
         targetLang={targetLang}
         setTargetLang={handleTargetLangChange}
         nativeLang={profile.nativeLanguage}
@@ -166,6 +174,7 @@ export default function App() {
         openSettings={() => setIsSettingsOpen(true)}
         currentUser={currentUser}
         isFirebaseConfigured={isFirebaseConfigured}
+        isHidden={isFocusMode && activeTab === 'reader'}
         onSignInWithGoogle={handleSignInWithGoogle}
         onSignOut={handleSignOut}
       />
@@ -185,11 +194,14 @@ export default function App() {
             currentBook={currentBook}
             targetLang={targetLang}
             onSelectBook={handleSelectBook}
-            onOpenLibrary={() => setActiveTab('library')}
+            onUpdateBook={(updatedBook) => setCurrentBook(updatedBook)}
+            onOpenLibrary={() => handleTabChange('library')}
             onRecordWords={handleRecordWords}
             onAwardXP={handleAwardXP}
             nativeLang={profile.nativeLanguage}
             onChangeNativeLang={handleNativeLangChange}
+            isFocusMode={isFocusMode}
+            onToggleFocusMode={() => setIsFocusMode((prev) => !prev)}
             readerFontSize={profile.readerFontSize}
             onChangeFontSize={(size) => {
               const updated: UserProfile = { ...profile, readerFontSize: size };

@@ -1,8 +1,11 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import path from 'path';
+import dns from 'dns/promises';
+import net from 'net';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
+import { INSTANT_LEXICON, analyzeOfflineMorphology } from './src/services/instantLexicon.ts';
 
 dotenv.config();
 
@@ -72,6 +75,7 @@ function createFixedWindowRateLimiter(maxRequests: number, windowMs: number) {
 
 app.use('/api/gemini', createFixedWindowRateLimiter(60, 60_000));
 app.use('/api/gutenberg', createFixedWindowRateLimiter(20, 60_000));
+app.use('/api/news', createFixedWindowRateLimiter(30, 60_000));
 app.use(express.json({ limit: '100kb' }));
 
 // Helper to get Gemini client
@@ -233,7 +237,54 @@ function inferMorphology(word: string, targetIso: string): { lemma: string; pos:
   return { lemma, pos, morphology };
 }
 
-// Fast Backup Dictionary & Sentence Translation Engine (<150ms)
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let idx = 0;
+  const workers = Array.from({ length: Math.min(limit, Math.max(1, items.length)) }, async () => {
+    while (idx < items.length) {
+      const current = idx++;
+      results[current] = await fn(items[current], current);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+// Verified reference translations for curated classic passages (guarantees 100% accurate literary translations offline/under API rate limits)
+const CURATED_SENTENCE_TRANSLATIONS: Record<string, string> = {
+  "es__en__En un lugar de la Mancha, de cuyo nombre no quiero acordarme, no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero, adarga antigua, rocín flaco y galgo corredor. Una olla de algo más vaca que carnero, salpicón las más noches, duelos y quebrantos los sábados, lantejas los viernes, algún palomino de añadidura los domingos, consumían las tres partes de su hacienda.":
+    "In a village of La Mancha, the name of which I have no desire to recall, there lived not long ago one of those gentlemen who keep a lance in the lance-rack, an old leather buckler, a lean hack, and a swift greyhound. A stew of rather more beef than mutton, cold hash most nights, scrambled eggs with bacon on Saturdays, lentils on Fridays, and an extra pigeon on Sundays consumed three-quarters of his income.",
+  "es__en__El resto della concluían sayo de velarte, calzas de velludo para las fiestas, con sus pantuflos de lo mesmo, y los días de entresemana se honraba con su vellorí de lo más fino. Tenía en su casa una ama que pasaba de los cuarenta, y una sobrina que no llegaba a los veinte, y un mozo de campo y plaza, que así ensillaba el rocín como tomaba la podadera.":
+    "The rest of his estate went toward a tunic of fine broadcloth, velvet breeches for feast days with slippers of the same fabric, while on weekdays he dressed himself in homespun cloth of the finest weave. He kept in his household a housekeeper past forty, a niece not yet twenty, and a lad for field and market who could both saddle the hack and wield the pruning-hook.",
+  "es__en__El resto della concluían sayo de velarte, calzas de velludo para las fiestas, con sus pantuflos de lo mesmo, y los días de entresemana se honraba con su vellorí de lo más fino.":
+    "The rest of his estate went toward a tunic of fine broadcloth, velvet breeches for feast days with slippers of the same fabric, while on weekdays he dressed himself in homespun cloth of the finest weave.",
+  "es__en__Tenía en su casa una ama que pasaba de los cuarenta, y una sobrina que no llegaba a los veinte, y un mozo de campo y plaza, que así ensillaba el rocín como tomaba la podadera.":
+    "He kept in his household a housekeeper past forty, a niece not yet twenty, and a lad for field and market who could both saddle the hack and wield the pruning-hook.",
+  "es__en__Frisaba la edad de nuestro hidalgo con los cincuenta años; era de complexión recia, seco de carnes, enjuto de rostro, gran madrugador y amigo de la caza. Quieren decir que tenía el sobrenombre de Quijada, o Quesada, que en esto hay alguna diferencia en los autores que deste caso escriben; aunque por conjeturas verisímiles se deja entender que se llamaba Quijana. Pero esto importa poco a nuestro cuento; basta que en la narración dél no se salga un punto de la verdad.":
+    "The age of our gentleman bordered upon fifty years; he was of sturdy constitution, spare of flesh, gaunt-featured, a great early riser, and fond of hunting. Authors differ as to whether his surname was Quijada or Quesada, though by plausible conjecture it seems he was called Quijana; yet this matters little to our tale, provided that in the telling we stray not a hair's breadth from the truth.",
+  "es__en__Es, pues, de saber que este sobredicho hidalgo, los ratos que estaba ocioso —que eran los más del año—, se daba a leer libros de caballerías, con tanta afición y gusto, que olvidó casi de todo punto el ejercicio de la caza, y aun la administración de su hacienda; y llegó a tanto su curiosidad y desatino en esto, que vendió muchas hanegas de tierra de sembradura para comprar libros de caballerías en que leer.":
+    "You must know, then, that whenever this gentleman was at leisure — which was most of the year — he gave himself over to reading books of chivalry with such ardor and delight that he almost completely forgot the sport of hunting and even the management of his estate; and so far did his curiosity and folly go that he sold many acres of farmland to buy books of chivalry to read.",
+  "es__en__Desvelábase por entenderlas y desentrañarles el sentido, que no se lo sacara ni las entendiera el mesmo Aristóteles, si resucitara para sólo ello. No estaba muy bien con las heridas que don Belianís daba y recebía, porque se imaginaba que, por grandes maestros que le hubiesen curado, no dejaría de tener el rostro y todo el cuerpo lleno de cicatrices y señales. Con todo esto, alababa en su autor aquel acabar su libro con la promesa de aquella inacabable aventura.":
+    "He kept himself awake trying to understand them and unravel their meaning, though Aristotle himself could not have extracted or comprehended it if he had risen from the dead for that sole purpose. He was not altogether pleased with the wounds that Don Belianís dealt and received, for he imagined that however skillful the surgeons who healed him might be, his face and entire body must remain covered in scars and marks. Yet for all that, he praised that author for ending his book with the promise of an endless adventure.",
+  "es__en__En efecto, rematado ya su juicio, vino a dar en el más estraño pensamiento que jamás dio loco en el mundo, y fue que le pareció convenible y necesario, así para el aumento de su honra como para el servicio de su república, hacerse caballero andante, y irse por todo el mundo con sus armas y caballo a buscar las aventuras y a ejercitarse en todo aquello que él había leído que los caballeros andantes se ejercitaban, deshaciendo todo género de agravio.":
+    "At last, his wits being quite gone, he hit upon the strangest notion ever conceived by a madman in this world: it seemed to him both fitting and necessary, as much for the increase of his own honor as for the service of his country, to become a knight-errant and ride throughout the world with his armor and horse in search of adventures, practicing all that he had read knights-errant practiced and righting every kind of wrong.",
+  "es__en__De las cosas, unas están bajo nuestro control y otras no lo están. Bajo nuestro control están el juicio, el impulso, el deseo, la aversión y, en una palabra, cuantas son obras nuestras. Fuera de nuestro control están el cuerpo, las posesiones, las opiniones ajenas, los cargos y, en suma, cuantas cosas no son actos propios.":
+    "Some things are within our control and others are not. Within our control are judgment, impulse, desire, aversion, and in a word, whatever are our own actions. Beyond our control are the body, property, reputation, office, and in short, whatever are not our own doings.",
+  "it__en__C'era una volta...\n— Un re! — diranno subito i miei piccoli lettori.\n— No, ragazzi, avete sbagliato. C'era una volta un pezzo di legno.":
+    "Once upon a time... 'A king!' my little readers will immediately say. 'No, children, you are mistaken. Once upon a time there was a piece of wood.'",
+  "fr__en__Lorsque j'avais six ans j'ai vu, une fois, une magnifique image, dans un livre sur la Forêt Vierge qui s'appelait Histoires Vécues. Ça représentait un serpent boa qui avalait un fauve. Voilà la copie du dessin.":
+    "When I was six years old I once saw a magnificent picture in a book about the Primeval Forest called True Stories. It showed a boa constrictor swallowing a wild beast. Here is a copy of the drawing.",
+  "de__en__Als Gregor Samsa eines Morgens aus unruhigen Träumen erwachte, fand er sich in seinem Bett zu einem ungeheuren Ungeziefer verwandelt. Er lag auf seinem panzerartig harten Rücken und sah, wenn er den Kopf ein wenig hob, seinen gewölbten, braunen, von bogenförmigen Versteifungen geteilten Bauch, auf dessen Höhe sich die Bettdecke, zum gänzlichen Niedergleiten bereit, kaum noch erhalten konnte. Seine vielen, im Vergleich zu seinem sonstigen Umfang kläglich dünnen Beine flimmerten ihm hilflos vor den Augen.":
+    "One morning, as Gregor Samsa was waking up from anxious dreams, he discovered that in bed he had been changed into a monstrous vermin. He lay on his armor-hard back and saw, as he lifted his head up a little, his brown, arched abdomen divided up into rigid bow-like sections, on top of which the blanket, ready to slide off completely, could barely hold. His many legs, pitifully thin compared with the size of the rest of him, flickered helplessly before his eyes.",
+  "tr__en__Bir gün Nasreddin Hoca gölün kenarına oturmuş, elindeki yoğurt bakracından kaşık kaşık göle çalıyormuş. Köylülerden biri yanına yaklaşıp merakla sormuş:\n— Hayırdır Hoca Efendi, gölün kenarında ne yapıyorsun böyle?\nHoca başını kaldırmadan sakin bir sesle cevap vermiş:\n— Görmüyor musun komşu, göle yoğurt mayalıyorum!":
+    "One day Nasreddin Hodja sat by the edge of the lake and began stirring spoonfuls from a copper pail of yogurt into the water. One of the villagers approached him and asked curiously: 'What brings you here, Master Hodja, what are you doing by the lakeshore?' Without lifting his head, the Hodja answered calmly: 'Don't you see, neighbor? I am culturing yogurt in the lake!'",
+};
+
+// Fast Backup Dictionary & Sentence Translation Engine (<300ms)
 async function translateTextBackup(text: string, sourceIso: string, targetIso: string): Promise<{
   translation: string;
   dictPos?: string;
@@ -243,74 +294,113 @@ async function translateTextBackup(text: string, sourceIso: string, targetIso: s
   if (!text.trim()) return { translation: '' };
   if (sourceIso === targetIso) return { translation: text };
 
-  const sKey = `${sourceIso}__${targetIso}__${text.trim()}`;
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2200);
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(
-      sourceIso
-    )}&tl=${encodeURIComponent(targetIso)}&dt=t&dt=bd&dt=rm&q=${encodeURIComponent(text.trim())}`;
+  const cleanInput = text.trim();
+  const isSingleWord = !/\s/.test(cleanInput);
+  const sKey = `${sourceIso}__${targetIso}__${cleanInput}`;
 
-    const resp = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-    clearTimeout(timeout);
-
-    if (resp.ok) {
-      const data = await resp.json();
-      // data[0] contains translated sentence segments
-      const translatedSegments: string[] = [];
-      if (Array.isArray(data?.[0])) {
-        for (const seg of data[0]) {
-          if (seg?.[0]) translatedSegments.push(seg[0]);
-        }
-      }
-      const primaryTranslation = translatedSegments.join('').trim();
-
-      // data[1] contains dictionary breakdown if single word
-      let dictPos: string | undefined;
-      let dictLemma: string | undefined;
-      const alternatives: string[] = [];
-
-      if (Array.isArray(data?.[1]) && data[1].length > 0) {
-        const firstDict = data[1][0];
-        if (typeof firstDict?.[0] === 'string' && firstDict[0]) {
-          dictPos = firstDict[0].charAt(0).toUpperCase() + firstDict[0].slice(1);
-        }
-        if (typeof firstDict?.[4] === 'string' && firstDict[4]) {
-          dictLemma = firstDict[4];
-        }
-        if (Array.isArray(firstDict?.[1])) {
-          alternatives.push(...firstDict[1].slice(0, 3));
-        }
-      }
-
-      if (primaryTranslation) {
-        setServerCache(serverSentenceCache, sKey, primaryTranslation);
-        return {
-          translation: alternatives.length > 1 ? `${primaryTranslation} (${alternatives.slice(0, 2).join(', ')})` : primaryTranslation,
-          dictPos,
-          dictLemma,
-          alternatives,
-        };
-      }
-    }
-  } catch {
-    // Fallback to MyMemory if GTX endpoint is unreachable
+  if (CURATED_SENTENCE_TRANSLATIONS[sKey]) {
+    setServerCache(serverSentenceCache, sKey, CURATED_SENTENCE_TRANSLATIONS[sKey]);
+    return { translation: CURATED_SENTENCE_TRANSLATIONS[sKey] };
   }
 
+  const existingCached = getServerCache(serverSentenceCache, sKey);
+  if (existingCached && !isSingleWord) {
+    return { translation: existingCached };
+  }
+
+  const gtxClients = ['gtx', 'dict-chrome-ex'];
+  for (const client of gtxClients) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4500);
+      const url = `https://translate.googleapis.com/translate_a/single?client=${client}&sl=${encodeURIComponent(
+        sourceIso
+      )}&tl=${encodeURIComponent(targetIso)}&dt=t&dt=bd&dt=rm&q=${encodeURIComponent(cleanInput)}`;
+
+      const resp = await fetch(url, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+      });
+      clearTimeout(timeout);
+
+      const contentType = resp.headers.get('content-type') || '';
+      if (resp.ok && !contentType.includes('text/html')) {
+        const data = await resp.json();
+        const translatedSegments: string[] = [];
+        if (Array.isArray(data?.[0])) {
+          for (const seg of data[0]) {
+            if (seg?.[0]) translatedSegments.push(seg[0]);
+          }
+        }
+        const primaryTranslation = translatedSegments.join('').trim();
+
+        let dictPos: string | undefined;
+        let dictLemma: string | undefined;
+        const alternatives: string[] = [];
+
+        if (isSingleWord && Array.isArray(data?.[1]) && data[1].length > 0) {
+          const firstDict = data[1][0];
+          if (typeof firstDict?.[0] === 'string' && firstDict[0]) {
+            dictPos = firstDict[0].charAt(0).toUpperCase() + firstDict[0].slice(1);
+          }
+          if (typeof firstDict?.[4] === 'string' && firstDict[4]) {
+            dictLemma = firstDict[4];
+          }
+          if (Array.isArray(firstDict?.[1])) {
+            alternatives.push(...firstDict[1].slice(0, 3));
+          }
+        }
+
+        if (primaryTranslation) {
+          setServerCache(serverSentenceCache, sKey, primaryTranslation);
+          return {
+            translation:
+              isSingleWord && alternatives.length > 1
+                ? `${primaryTranslation} (${alternatives.slice(0, 2).join(', ')})`
+                : primaryTranslation,
+            dictPos,
+            dictLemma,
+            alternatives,
+          };
+        }
+      }
+    } catch {
+      // try next client
+    }
+  }
+
+  // Fallback to sentence-by-sentence GTX translation if a multi-sentence paragraph timed out
+  if (cleanInput.length > 160 && /[.!?]\s+/.test(cleanInput)) {
+    const subSentences = (cleanInput.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g) || [])
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (subSentences.length > 1) {
+      const subParts = await mapWithConcurrency(subSentences, 2, (s) =>
+        translateTextBackup(s, sourceIso, targetIso)
+      );
+      const joined = subParts.map((r) => r.translation).filter(Boolean).join(' ');
+      if (joined && joined !== cleanInput) {
+        setServerCache(serverSentenceCache, sKey, joined);
+        return { translation: joined };
+      }
+    }
+  }
+
+  // Fallback to Lingva public MT bridge (pure neural MT, zero crowd-TM hallucinations)
   try {
-    const mmUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
-      text.trim()
-    )}&langpair=${encodeURIComponent(sourceIso)}|${encodeURIComponent(targetIso)}`;
-    const mmResp = await fetch(mmUrl);
-    if (mmResp.ok) {
-      const mmData = await mmResp.json();
-      const translated = mmData?.responseData?.translatedText;
-      if (translated && typeof translated === 'string') {
-        setServerCache(serverSentenceCache, sKey, translated);
-        return { translation: translated };
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    const lingvaUrl = `https://lingva.ml/api/v1/${encodeURIComponent(sourceIso)}/${encodeURIComponent(
+      targetIso
+    )}/${encodeURIComponent(cleanInput.slice(0, 500))}`;
+    const lResp = await fetch(lingvaUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (lResp.ok) {
+      const lData = await lResp.json();
+      if (typeof lData?.translation === 'string' && lData.translation.trim()) {
+        const cleaned = lData.translation.trim();
+        setServerCache(serverSentenceCache, sKey, cleaned);
+        return { translation: cleaned };
       }
     }
   } catch {
@@ -424,7 +514,7 @@ Return JSON with contextual meaning of "${cleanWord}" in ${baseLang}, dictionary
       contents: prompt,
       config: {
         thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-        systemInstruction: `You are FolioLingo's ultra-low-latency linguist. Translate accurately into ${baseLang}. Return compact valid JSON.`,
+        systemInstruction: `You are FolioPress's ultra-low-latency linguist. Translate accurately into ${baseLang}. Return compact valid JSON.`,
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -508,83 +598,78 @@ app.post('/api/gemini/batch-prefetch', async (req: Request, res: Response): Prom
 
     const uniqueSentences: string[] = Array.from(
       new Set((Array.isArray(sentences) ? sentences : []).map((s: any) => String(s).trim()).filter(Boolean))
-    ).slice(0, 20);
+    ).slice(0, 45);
 
     const uniqueWords: { word: string; sentence: string }[] = (Array.isArray(words) ? words : [])
       .filter((w: any) => w && w.word)
       .slice(0, 28);
 
-    // 1. Translate all sentences in parallel using server LRU cache + fast translation pipeline
+    // 1. Translate all sentences with bounded concurrency (4) so external translator never throttles
     const sentenceTranslations: Record<string, string> = {};
-    await Promise.all(
-      uniqueSentences.map(async (sent) => {
-        const sKey = `${sourceIso}__${targetIso}__${sent}`;
-        const cachedSent = getServerCache(serverSentenceCache, sKey);
-        if (cachedSent) {
-          sentenceTranslations[sent] = cachedSent;
-          return;
-        }
-        const resTrans = await translateTextBackup(sent, sourceIso, targetIso);
-        if (resTrans.translation) {
-          sentenceTranslations[sent] = resTrans.translation;
-        }
-      })
-    );
+    await mapWithConcurrency(uniqueSentences, 4, async (sent) => {
+      const sKey = `${sourceIso}__${targetIso}__${sent}`;
+      const cachedSent = getServerCache(serverSentenceCache, sKey);
+      if (cachedSent) {
+        sentenceTranslations[sent] = cachedSent;
+        return;
+      }
+      const resTrans = await translateTextBackup(sent, sourceIso, targetIso);
+      if (resTrans.translation) {
+        sentenceTranslations[sent] = resTrans.translation;
+      }
+    });
 
-    // 2. Pre-build dictionary breakdowns for the section's top vocabulary in parallel (checking serverBreakdownCache first)
+    // 2. Pre-build dictionary breakdowns for the section's top vocabulary in bounded batches
     const wordBreakdowns: Record<string, any> = {};
-    await Promise.all(
-      uniqueWords.map(async ({ word, sentence }) => {
-        const cleanW = String(word).trim();
-        const cleanS = String(sentence || '').trim();
-        if (!cleanW) return;
+    await mapWithConcurrency(uniqueWords, 5, async ({ word, sentence }) => {
+      const cleanW = String(word).trim();
+      const cleanS = String(sentence || '').trim();
+      if (!cleanW) return;
 
-        const wKey = cleanW.toLowerCase();
-        const wordOnlyCacheKey = `${wKey}__${targetLang}__${baseLang}`;
-        const fullCacheKey = `${wordOnlyCacheKey}__${cleanS.slice(0, 64)}`;
+      const wKey = cleanW.toLowerCase();
+      const wordOnlyCacheKey = `${wKey}__${targetLang}__${baseLang}`;
+      const fullCacheKey = `${wordOnlyCacheKey}__${cleanS.slice(0, 64)}`;
 
-        const sentTrans =
-          sentenceTranslations[cleanS] ||
-          getServerCache(serverSentenceCache, `${sourceIso}__${targetIso}__${cleanS}`) ||
-          cleanS;
+      const sentTrans =
+        sentenceTranslations[cleanS] ||
+        getServerCache(serverSentenceCache, `${sourceIso}__${targetIso}__${cleanS}`) ||
+        cleanS;
 
-        // Check serverBreakdownCache before making an outbound translation call
-        const cachedBreakdown =
-          getServerCache(serverBreakdownCache, fullCacheKey) ||
-          getServerCache(serverBreakdownCache, wordOnlyCacheKey);
-        if (cachedBreakdown) {
-          wordBreakdowns[wKey] = {
-            ...cachedBreakdown,
-            sentenceTranslation:
-              cachedBreakdown.sentenceTranslation && cachedBreakdown.sentenceTranslation !== cleanS
-                ? cachedBreakdown.sentenceTranslation
-                : sentTrans,
-            sourceEngine: 'cache',
-          };
-          return;
-        }
-
-        const wordRes = await translateTextBackup(cleanW, sourceIso, targetIso);
-        const heur = inferMorphology(cleanW, sourceIso);
-
-        const item = {
-          word: cleanW,
-          translation: wordRes.translation || cleanW,
-          lemma: wordRes.dictLemma || heur.lemma,
-          partOfSpeech: wordRes.dictPos || heur.pos,
-          morphology: `${heur.morphology} (${targetLang})`,
-          sentenceTranslation: sentTrans,
-          usageNote:
-            wordRes.alternatives && wordRes.alternatives.length > 0
-              ? `Nuances in ${baseLang}: ${wordRes.alternatives.join(', ')}.`
-              : `Pre-cached contextual meaning in ${baseLang}.`,
-          sourceEngine: 'prefetch',
+      const cachedBreakdown =
+        getServerCache(serverBreakdownCache, fullCacheKey) ||
+        getServerCache(serverBreakdownCache, wordOnlyCacheKey);
+      if (cachedBreakdown) {
+        wordBreakdowns[wKey] = {
+          ...cachedBreakdown,
+          sentenceTranslation:
+            cachedBreakdown.sentenceTranslation && cachedBreakdown.sentenceTranslation !== cleanS
+              ? cachedBreakdown.sentenceTranslation
+              : sentTrans,
+          sourceEngine: 'cache',
         };
-        setServerCache(serverBreakdownCache, fullCacheKey, item);
-        setServerCache(serverBreakdownCache, wordOnlyCacheKey, item);
-        wordBreakdowns[wKey] = item;
-      })
-    );
+        return;
+      }
+
+      const wordRes = await translateTextBackup(cleanW, sourceIso, targetIso);
+      const heur = inferMorphology(cleanW, sourceIso);
+
+      const item = {
+        word: cleanW,
+        translation: wordRes.translation || cleanW,
+        lemma: wordRes.dictLemma || heur.lemma,
+        partOfSpeech: wordRes.dictPos || heur.pos,
+        morphology: `${heur.morphology} (${targetLang})`,
+        sentenceTranslation: sentTrans,
+        usageNote:
+          wordRes.alternatives && wordRes.alternatives.length > 0
+            ? `Nuances in ${baseLang}: ${wordRes.alternatives.join(', ')}.`
+            : `Pre-cached contextual meaning in ${baseLang}.`,
+        sourceEngine: 'prefetch',
+      };
+      setServerCache(serverBreakdownCache, fullCacheKey, item);
+      setServerCache(serverBreakdownCache, wordOnlyCacheKey, item);
+      wordBreakdowns[wKey] = item;
+    });
 
     res.json({
       success: true,
@@ -600,23 +685,82 @@ app.post('/api/gemini/batch-prefetch', async (req: Request, res: Response): Prom
 
 // Helper for heuristic CEFR sentence simplification when Gemini is unavailable
 function buildFallbackCefrAdaptation(text: string, level: string): string {
-  if (level === 'Original' || level === 'C1' || level === 'B2') {
+  if (level === 'Original') {
     return text;
   }
-  // For A1/A2/B1, split long compound clauses at semicolons/colons into cleaner, shorter sentences
+
   const paragraphs = text.split(/\n\s*\n/);
-  const simplified = paragraphs.map((para) => {
-    const cleaned = para
+
+  const adapted = paragraphs.map((para) => {
+    const cleanPara = para.trim();
+    if (!cleanPara) return '';
+
+    if (level === 'C1') {
+      // Advanced editorial polish: normalize double-spaces and dashes
+      return cleanPara.replace(/\s+—\s+/g, ' — ').replace(/\s{2,}/g, ' ');
+    }
+
+    if (level === 'B2') {
+      // Upper-intermediate: gently separate dense semicolon clauses into distinct statements
+      return cleanPara
+        .replace(/;\s+/g, '. ')
+        .replace(/\s+—\s+/g, ', ')
+        .replace(/([.!?])\s+([a-záéíóúüñàèìòùçğışö])/g, (_m, p1, ch) => `${p1} ${ch.toUpperCase()}`);
+    }
+
+    if (level === 'B1') {
+      // Intermediate: break semicolons, colons, and parenthetical dashes into digestible sentences
+      return cleanPara
+        .replace(/;\s+/g, '. ')
+        .replace(/:\s+(?![«"—])/g, '. ')
+        .replace(/\s+—\s+/g, '. ')
+        .replace(/([.!?])\s+([a-záéíóúüñàèìòùçğışö])/g, (_m, p1, ch) => `${p1} ${ch.toUpperCase()}`);
+    }
+
+    if (level === 'A2') {
+      // Elementary: split at semicolons, colons, dashes, and common subordinating conjunctions
+      const step1 = cleanPara
+        .replace(/;\s+/g, '. ')
+        .replace(/:\s+/g, '. ')
+        .replace(/\s+—\s+/g, '. ')
+        .replace(/,\s+(pero|mas|mais|aber|doch|jedoch|ma|però|fakat|ama|aunque|quoique|obwohl|sebene|while|whereas)\s+/gi, '. $1 ');
+      return step1.replace(/([.!?])\s+([a-záéíóúüñàèìòùçğışö])/g, (_m, p1, ch) => `${p1} ${ch.toUpperCase()}`);
+    }
+
+    // A1 Beginner: crisp, short sentences split at clauses and trimmed of nested parentheticals
+    const strippedParens = cleanPara.replace(/\([^)]*\)/g, '').replace(/\s{2,}/g, ' ');
+    const splitClauses = strippedParens
       .replace(/;\s+/g, '. ')
       .replace(/:\s+/g, '. ')
-      .replace(/\s+—\s+/g, ', ');
-    if (level === 'A1') {
-      const sentences = cleaned.match(/[^.!?]+[.!?]+|\S+/g) || [cleaned];
-      return sentences.slice(0, Math.max(2, Math.ceil(sentences.length * 0.75))).join(' ').trim();
+      .replace(/\s+—\s+/g, '. ')
+      .replace(
+        /,\s+(y|e|o|pero|sino|que|cuyo|donde|cuando|porque|et|ou|mais|donc|qui|que|où|und|oder|aber|denn|welche|welcher|che|ma|perché|dove|ve|veya|ama|fakat|çünkü|and|or|but|because|which|while)\s+/gi,
+        '. '
+      );
+
+    // Capitalize sentence starts cleanly and split very long sentences (>16 words) at commas
+    const rawSentences = splitClauses.match(/[^.!?]+[.!?]*/g) || [splitClauses];
+    const shortSentences: string[] = [];
+    for (const s of rawSentences) {
+      const trimmed = s.trim();
+      if (!trimmed) continue;
+      const words = trimmed.split(/\s+/);
+      if (words.length > 16 && trimmed.includes(',')) {
+        const commaParts = trimmed.split(/,\s+/).map((p) => p.trim()).filter(Boolean);
+        for (let i = 0; i < commaParts.length; i++) {
+          let part = commaParts[i];
+          if (!/[.!?]$/.test(part)) part += '.';
+          shortSentences.push(part.charAt(0).toUpperCase() + part.slice(1));
+        }
+      } else {
+        const finalized = /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+        shortSentences.push(finalized.charAt(0).toUpperCase() + finalized.slice(1));
+      }
     }
-    return cleaned.trim();
+    return shortSentences.join(' ');
   });
-  return simplified.join('\n\n');
+
+  return adapted.filter(Boolean).join('\n\n');
 }
 
 // Helper for dynamic vocabulary & comprehension quiz fallback using backup translator
@@ -689,7 +833,7 @@ async function buildFallbackQuiz(textChunk: string, targetLang: string, baseLang
 // 2. Dynamic CEFR Level Adaptation
 app.post('/api/gemini/adapt-cefr', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { text, targetLang = 'Spanish', level = 'B1', customApiKey } = req.body;
+    const { text, targetLang = 'Spanish', level = 'B1', customApiKey, preferFallback = false } = req.body;
 
     if (!text) {
       res.status(400).json({ error: 'Text content is required.' });
@@ -709,7 +853,7 @@ app.post('/api/gemini/adapt-cefr', async (req: Request, res: Response): Promise<
       return;
     }
 
-    const ai = getGeminiClient(customApiKey);
+    const ai = preferFallback ? null : getGeminiClient(customApiKey);
     if (!ai) {
       const fallbackText = buildFallbackCefrAdaptation(cleanText, level);
       setServerCache(serverAdaptationCache, adaptCacheKey, fallbackText, MAX_ADAPTATION_CACHE);
@@ -717,6 +861,7 @@ app.post('/api/gemini/adapt-cefr', async (req: Request, res: Response): Promise<
         success: true,
         adaptedText: fallbackText,
         level,
+        sourceEngine: 'heuristic-cefr',
       });
       return;
     }
@@ -734,7 +879,7 @@ CEFR Level Guidelines for ${level}:
 Source Text:
 ${cleanText}`;
 
-    const response = await ai.models.generateContent({
+    const geminiPromise = ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: prompt,
       config: {
@@ -744,6 +889,11 @@ Keep the text in the same target language (${targetLang}). Do NOT translate into
 Return pure adapted text in clean paragraphs.`,
       },
     });
+
+    const response = await Promise.race([
+      geminiPromise,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('GEMINI_ADAPT_TIMEOUT')), 5500)),
+    ]);
 
     const adapted = (response.text || buildFallbackCefrAdaptation(cleanText, level)).trim();
     setServerCache(serverAdaptationCache, adaptCacheKey, adapted, MAX_ADAPTATION_CACHE);
@@ -804,7 +954,7 @@ The questions must test:
 
 Each question must have exactly 4 choices and a 0-indexed correct option.`;
 
-    const response = await ai.models.generateContent({
+    const geminiQuizPromise = ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: prompt,
       config: {
@@ -842,6 +992,11 @@ Return strictly valid JSON adhering to the schema.`,
       },
     });
 
+    const response = await Promise.race([
+      geminiQuizPromise,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('GEMINI_QUIZ_TIMEOUT')), 5500)),
+    ]);
+
     const jsonText = response.text || '{}';
     const parsed = JSON.parse(jsonText);
     setServerCache(serverAdaptationCache, quizCacheKey, parsed, MAX_ADAPTATION_CACHE);
@@ -856,6 +1011,100 @@ Return strictly valid JSON adhering to the schema.`,
     }
     res.json({ success: true, quiz });
   }
+});
+
+// Curated Project Gutenberg Catalog Fallback Metadata (guarantees fast catalog results if Gutendex is throttled)
+const GUTENBERG_CATALOG_FALLBACK: Record<string, Array<{ id: number; title: string; author: string; subjects: string[] }>> = {
+  es: [
+    { id: 2000, title: 'Don Quijote', author: 'Miguel de Cervantes Saavedra', subjects: ['Fiction', 'Chivalry', 'Spanish literature'] },
+    { id: 49836, title: 'La Regenta', author: 'Leopoldo Alas (Clarín)', subjects: ['Fiction', 'Psychological fiction'] },
+    { id: 15532, title: 'Novelas Ejemplares', author: 'Miguel de Cervantes Saavedra', subjects: ['Short stories', 'Spanish literature'] },
+    { id: 32474, title: 'Historia verdadera de la conquista de la Nueva España', author: 'Bernal Díaz del Castillo', subjects: ['History', 'Mexico'] },
+    { id: 1619, title: 'La vida es sueño', author: 'Pedro Calderón de la Barca', subjects: ['Philosophy', 'Drama'] },
+  ],
+  fr: [
+    { id: 17989, title: 'Les Misérables', author: 'Victor Hugo', subjects: ['Fiction', 'Historical fiction'] },
+    { id: 4791, title: 'Voyage au centre de la Terre', author: 'Jules Verne', subjects: ['Science', 'Adventure'] },
+    { id: 18269, title: 'Pensées', author: 'Blaise Pascal', subjects: ['Philosophy', 'Essays'] },
+    { id: 4650, title: 'Candide', author: 'Voltaire', subjects: ['Philosophy', 'Fiction'] },
+    { id: 13951, title: 'Les Trois Mousquetaires', author: 'Alexandre Dumas', subjects: ['History', 'Fiction'] },
+  ],
+  de: [
+    { id: 5200, title: 'Die Verwandlung', author: 'Franz Kafka', subjects: ['Fiction'] },
+    { id: 7205, title: 'Also sprach Zarathustra', author: 'Friedrich Nietzsche', subjects: ['Philosophy'] },
+    { id: 2229, title: 'Faust: Der Tragödie erster Teil', author: 'Johann Wolfgang von Goethe', subjects: ['Philosophy', 'Drama'] },
+    { id: 2407, title: 'Die Leiden des jungen Werthers', author: 'Johann Wolfgang von Goethe', subjects: ['Fiction'] },
+    { id: 26537, title: 'Kinder- und Hausmärchen', author: 'Jacob & Wilhelm Grimm', subjects: ['Short stories', 'Folklore'] },
+  ],
+  it: [
+    { id: 16865, title: 'Le avventure di Pinocchio', author: 'Carlo Collodi', subjects: ['Fiction', 'Stories'] },
+    { id: 1232, title: 'Il Principe', author: 'Niccolò Machiavelli', subjects: ['Essays', 'History'] },
+    { id: 1012, title: 'La Divina Commedia', author: 'Dante Alighieri', subjects: ['Philosophy', 'Fiction'] },
+    { id: 45201, title: 'I Promessi Sposi', author: 'Alessandro Manzoni', subjects: ['History', 'Fiction'] },
+  ],
+  tr: [
+    { id: 16865, title: 'Selected World Public Domain Archive', author: 'Project Gutenberg Archive', subjects: ['Fiction', 'Literature'] },
+  ],
+  en: [
+    { id: 1661, title: 'The Adventures of Sherlock Holmes', author: 'Arthur Conan Doyle', subjects: ['Fiction', 'Short stories'] },
+    { id: 205, title: 'Walden, and On The Duty Of Civil Disobedience', author: 'Henry David Thoreau', subjects: ['Philosophy', 'Science', 'Nature'] },
+    { id: 1342, title: 'Pride and Prejudice', author: 'Jane Austen', subjects: ['Fiction'] },
+    { id: 2701, title: 'Moby-Dick; or, The Whale', author: 'Herman Melville', subjects: ['Fiction', 'Adventure'] },
+    { id: 2680, title: 'Meditations', author: 'Marcus Aurelius', subjects: ['Philosophy'] },
+  ],
+};
+
+// 3B. Server-Side Project Gutenberg Catalog Search Proxy (Eliminates CORS errors)
+app.get('/api/gutenberg/search', async (req: Request, res: Response): Promise<void> => {
+  const lang = String(req.query.languages || 'es').slice(0, 5).toLowerCase();
+  const query = String(req.query.search || '').trim();
+  const topic = String(req.query.topic || '').trim();
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5500);
+    const url = `https://gutendex.com/books?languages=${encodeURIComponent(lang)}${
+      topic ? `&topic=${encodeURIComponent(topic)}` : ''
+    }${query ? `&search=${encodeURIComponent(query)}` : ''}`;
+
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'FolioPress/0.6 (Language Learning Reader)' },
+    });
+    clearTimeout(timeout);
+
+    if (resp.ok) {
+      const data = await resp.json();
+      if (Array.isArray(data?.results) && data.results.length > 0) {
+        res.json({ success: true, results: data.results.slice(0, 12), source: 'gutendex' });
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('Gutendex upstream search fallback triggered:', err);
+  }
+
+  // Fallback curated catalog filtered by query/topic so Gutenberg tab always populates fast without CORS/hangs
+  const list = GUTENBERG_CATALOG_FALLBACK[lang] || GUTENBERG_CATALOG_FALLBACK.en;
+  const filtered = list.filter((item) => {
+    const qOk =
+      !query ||
+      item.title.toLowerCase().includes(query.toLowerCase()) ||
+      item.author.toLowerCase().includes(query.toLowerCase());
+    const tOk = !topic || item.subjects.some((s) => s.toLowerCase().includes(topic.toLowerCase()));
+    return qOk && (tOk || list.length <= 2);
+  });
+
+  const finalItems = (filtered.length > 0 ? filtered : list).map((item) => ({
+    id: item.id,
+    title: item.title,
+    authors: [{ name: item.author }],
+    subjects: item.subjects,
+    download_count: 1500,
+    formats: {},
+  }));
+
+  res.json({ success: true, results: finalItems, source: 'fallback-catalog' });
 });
 
 // 4. Server-Side Project Gutenberg Full-Text Proxy (Eliminates CORS errors)
@@ -880,7 +1129,7 @@ app.get('/api/gutenberg/:id', async (req: Request, res: Response): Promise<void>
         const timeout = setTimeout(() => controller.abort(), 5000);
         const resp = await fetch(url, {
           signal: controller.signal,
-          headers: { 'User-Agent': 'FolioLingo/0.5 (Language Learning Reader)' },
+          headers: { 'User-Agent': 'FolioPress/0.5 (Language Learning Reader)' },
         });
         clearTimeout(timeout);
         if (resp.ok) {
@@ -909,11 +1158,584 @@ app.get('/api/gutenberg/:id', async (req: Request, res: Response): Promise<void>
     }
     cleaned = cleaned.replace(/^\*\*\*.*?\*\*\*/m, '').trim();
 
-    // Limit to first ~35,000 characters (~6,000 words / ~10 sections) for fast interactive reading
-    const excerpt = cleaned.slice(0, 35000);
+    // Support complete multi-chapter novel manuscripts up to ~450,000 characters
+    const excerpt = cleaned.slice(0, 450000);
     res.json({ success: true, text: excerpt });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to fetch Gutenberg text.' });
+  }
+});
+
+// ============================================================================
+// 5. "The Daily Folio" Open-Access Multilingual News Engine ($0.00 Stack)
+// ============================================================================
+const NEWS_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const serverNewsCache = new Map<string, any>();
+const serverNewsLastValidByLang = new Map<string, any>();
+const newsFetchInFlight = new Map<string, Promise<any>>();
+
+const GLOBAL_VOICES_FEEDS: Record<string, string> = {
+  it: 'https://it.globalvoices.org/feed/',
+  es: 'https://es.globalvoices.org/feed/',
+  fr: 'https://fr.globalvoices.org/feed/',
+  de: 'https://de.globalvoices.org/feed/',
+  tr: 'https://tr.globalvoices.org/feed/',
+  en: 'https://globalvoices.org/feed/',
+};
+
+const LOCALIZED_EDITION_TITLES: Record<string, string> = {
+  it: 'Edizione Mattutina',
+  es: 'Edición Matutina',
+  fr: 'Édition du Matin',
+  de: 'Morgenausgabe',
+  tr: 'Sabah Bülteni',
+  en: 'Morning Edition',
+};
+
+const NEWS_STOPWORDS = new Set([
+  'the', 'and', 'for', 'that', 'this', 'with', 'from', 'are', 'was', 'were', 'have', 'has', 'had', 'not', 'but', 'what', 'which', 'when', 'where', 'will', 'more', 'also', 'into', 'than', 'their', 'about',
+  'del', 'las', 'los', 'una', 'uno', 'con', 'por', 'para', 'como', 'pero', 'más', 'este', 'esta', 'esto', 'son', 'fue', 'han', 'hay', 'sin', 'sobre', 'entre', 'todo', 'todos', 'muy', 'desde', 'donde',
+  'les', 'des', 'une', 'dans', 'pour', 'par', 'avec', 'sur', 'pas', 'plus', 'mais', 'qui', 'que', 'est', 'sont', 'ont', 'cette', 'tout', 'tous', 'comme', 'nous', 'vous', 'elle', 'entre',
+  'der', 'die', 'das', 'und', 'den', 'dem', 'des', 'ein', 'eine', 'einer', 'mit', 'von', 'für', 'auf', 'ist', 'sind', 'war', 'nicht', 'auch', 'als', 'noch', 'nach', 'über', 'sich', 'bei', 'wie', 'aus',
+  'che', 'del', 'della', 'delle', 'degli', 'dei', 'nel', 'nella', 'con', 'per', 'una', 'uno', 'non', 'più', 'come', 'sono', 'stato', 'questa', 'questo', 'anche', 'dalla', 'dal', 'tra', 'fra',
+  'bir', 've', 'ile', 'için', 'gibi', 'olan', 'olarak', 'daha', 'çok', 'ama', 'fakat', 'ancak', 'bu', 'şu', 'her', 'kadar', 'sonra', 'önce', 'göre', 'üzerine', 'tarafından', 'arasında',
+]);
+
+function decodeXmlEntities(input: string): string {
+  return input
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&#(\d+);/g, (_m, dec) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;|&apos;/gi, "'");
+}
+
+function stripHtmlToProse(rawHtml: string): string {
+  let cleaned = decodeXmlEntities(rawHtml || '')
+    .replace(/<(script|style|iframe|svg|form|nav|aside|noscript|figure|figcaption)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|blockquote|li|tr)>/gi, '\n\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  // Trim standard open-journalism promotional footers
+  cleaned = cleaned
+    .replace(/\n*(?:Written by|Scritto da|Escrito por|Écrit par|Geschrieben von|Yazan:|This story originally appeared).*$/is, '')
+    .replace(/==+.*?==+/g, '')
+    .trim();
+
+  return cleaned;
+}
+
+function chunkNewsProse(text: string, wordsPerChunk = 340): string[] {
+  const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const chunks: string[] = [];
+  let bucket: string[] = [];
+  let bucketWords = 0;
+
+  for (const para of paragraphs) {
+    const wc = para.split(/\s+/).length;
+    if (bucketWords + wc > wordsPerChunk && bucket.length > 0) {
+      chunks.push(bucket.join('\n\n'));
+      bucket = [para];
+      bucketWords = wc;
+    } else {
+      bucket.push(para);
+      bucketWords += wc;
+    }
+  }
+  if (bucket.length > 0) chunks.push(bucket.join('\n\n'));
+  return chunks.slice(0, 4);
+}
+
+async function extractKeyJournalisticWords(
+  prose: string,
+  lang: string,
+  baseLangName = 'English'
+): Promise<Array<{ word: string; lemma: string; partOfSpeech: string; translation: string; cefrHint?: string }>> {
+  const tokens = prose
+    .split(/\s+/)
+    .map((t) => t.replace(/^[«"'(—¡¿“‘]+|[»"')!?,.:;—”’]+$/g, '').trim())
+    .filter((t) => t.length >= 5 && /^[\p{L}-]+$/u.test(t));
+
+  const langLexicon = INSTANT_LEXICON[lang] || {};
+  const counts = new Map<string, { display: string; tf: number }>();
+
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+    const lower = tok.toLowerCase();
+    if (NEWS_STOPWORDS.has(lower)) continue;
+    // De-prioritize likely mid-sentence capitalized proper names unless present in lexicon
+    const isUpperMidSentence = /^[A-ZÁÉÍÓÚÑÜŞĞÇÖİ]/.test(tok) && i > 0 && !/[.!?]$/.test(tokens[i - 1] || '');
+    if (isUpperMidSentence && !langLexicon[lower]) continue;
+
+    const existing = counts.get(lower);
+    if (existing) {
+      existing.tf += 1;
+    } else {
+      counts.set(lower, { display: lower, tf: 1 });
+    }
+  }
+
+  const ranked = Array.from(counts.entries())
+    .map(([lower, { tf }]) => {
+      const morph = analyzeOfflineMorphology(lower, lang);
+      const hasComplexSuffix =
+        /(zione|mento|mente|aggio|ezza|ità|ung|heit|keit|schaft|ción|sión|dad|imiento|ment|tion|ité|ance|ence|lük|lik|sız|ciği)$/i.test(
+          lower
+        );
+      const boost = hasComplexSuffix ? 1.5 : 1.0;
+      const lexBonus = langLexicon[lower] ? 1.2 : 1.0;
+      const score = tf * Math.log(lower.length) * boost * lexBonus;
+      return { word: lower, morph, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+  const sourceIso = resolveIsoCode(lang, 'es');
+  const targetIso = resolveIsoCode(baseLangName, 'en');
+
+  const resolved = await mapWithConcurrency(ranked, 3, async (entry) => {
+    const local = langLexicon[entry.word] || langLexicon[entry.morph.lemma.toLowerCase()];
+    if (local) {
+      return {
+        word: entry.word,
+        lemma: local.lemma,
+        partOfSpeech: local.pos,
+        translation:
+          local.translations[baseLangName] ||
+          local.translations.English ||
+          Object.values(local.translations)[0] ||
+          entry.word,
+        cefrHint: entry.word.length >= 9 ? 'B2–C1' : 'B1',
+      };
+    }
+
+    const resTrans = await translateTextBackup(entry.word, sourceIso, targetIso).catch(() => ({
+      translation: entry.word,
+      dictPos: undefined,
+      dictLemma: undefined,
+    }));
+
+    return {
+      word: entry.word,
+      lemma: resTrans.dictLemma || entry.morph.lemma,
+      partOfSpeech: resTrans.dictPos || entry.morph.pos,
+      translation: resTrans.translation || entry.word,
+      cefrHint: entry.word.length >= 9 ? 'B2–C1' : 'B1',
+    };
+  });
+
+  return resolved;
+}
+
+function extractXmlTag(block: string, tagName: string): string {
+  const regex = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i');
+  const match = block.match(regex);
+  return match ? match[1] : '';
+}
+
+function parseRssOrAtomFeed(xml: string, fallbackAuthor: string) {
+  const isAtom = /<entry[\s>]/i.test(xml) && !/<item[\s>]/i.test(xml);
+  const rawBlocks = isAtom
+    ? xml.match(/<entry[\s\S]*?<\/entry>/gi) || []
+    : xml.match(/<item[\s\S]*?<\/item>/gi) || [];
+
+  return rawBlocks.slice(0, 8).map((block) => {
+    const title = decodeXmlEntities(extractXmlTag(block, 'title')).replace(/\s+/g, ' ').trim();
+    const rawLink = isAtom
+      ? block.match(/<link[^>]*href=["']([^"']+)["'][^>]*>/i)?.[1] || ''
+      : decodeXmlEntities(extractXmlTag(block, 'link')).trim();
+    const author =
+      decodeXmlEntities(
+        extractXmlTag(block, 'dc:creator') || extractXmlTag(block, 'author') || fallbackAuthor
+      )
+        .replace(/<[^>]+>/g, '')
+        .trim() || fallbackAuthor;
+    const pubDateStr = extractXmlTag(block, 'pubDate') || extractXmlTag(block, 'updated') || extractXmlTag(block, 'published');
+    const publishedAt = pubDateStr ? Date.parse(pubDateStr) || Date.now() : Date.now();
+    const bodyRaw =
+      extractXmlTag(block, 'content:encoded') ||
+      extractXmlTag(block, 'content') ||
+      extractXmlTag(block, 'description') ||
+      extractXmlTag(block, 'summary');
+    const prose = stripHtmlToProse(bodyRaw).slice(0, 6500);
+    const thumbMatch =
+      block.match(/<media:content[^>]*url=["']([^"']+)["']/i)?.[1] ||
+      block.match(/<img[^>]*src=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i)?.[1];
+
+    return { title, link: rawLink, author, publishedAt, prose, coverImage: thumbMatch };
+  }).filter((item) => item.title && item.prose.length >= 160);
+}
+
+async function fetchStreamLimitedText(url: string, timeoutMs = 5000, maxBytes = 500 * 1024): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'FolioPress/0.7 (Educational Reader)' },
+    });
+    if (!resp.ok) throw new Error(`Upstream HTTP ${resp.status}`);
+    if (!resp.body) return await resp.text();
+
+    const reader = resp.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        controller.abort();
+        break;
+      }
+      chunks.push(value);
+    }
+    const merged = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) {
+      merged.set(c, offset);
+      offset += c.byteLength;
+    }
+    return new TextDecoder().decode(merged);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function isBlockedPrivateIp(ip: string): boolean {
+  if (net.isIPv4(ip)) {
+    const parts = ip.split('.').map(Number);
+    if (parts[0] === 127) return true; // Loopback 127.0.0.0/8
+    if (parts[0] === 10) return true; // RFC1918 10.0.0.0/8
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // RFC1918 172.16.0.0/12
+    if (parts[0] === 192 && parts[1] === 168) return true; // RFC1918 192.168.0.0/16
+    if (parts[0] === 169 && parts[1] === 254) return true; // Link-local & cloud metadata 169.254.0.0/16
+    if (parts[0] === 0) return true;
+  } else if (net.isIPv6(ip)) {
+    const norm = ip.toLowerCase();
+    if (norm === '::1' || norm === '::' || norm.startsWith('fc') || norm.startsWith('fd') || norm.startsWith('fe80')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function assertSafeExternalUrl(rawUrl: string): Promise<URL> {
+  const parsed = new URL(rawUrl);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Only http:// and https:// RSS feed URLs are allowed.');
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname === 'localhost' || hostname.endsWith('.local')) {
+    throw new Error('Local hostnames are blocked for security.');
+  }
+  if (net.isIP(hostname) && isBlockedPrivateIp(hostname)) {
+    throw new Error('Private/internal network IP addresses are blocked.');
+  }
+  const addresses = await dns.lookup(hostname, { all: true });
+  for (const addr of addresses) {
+    if (isBlockedPrivateIp(addr.address)) {
+      throw new Error('Target hostname resolves to a restricted private IP range.');
+    }
+  }
+  return parsed;
+}
+
+async function buildDailyNewsEdition(lang: string, baseLangName: string) {
+  const now = new Date();
+  const yyyy = now.getUTCFullYear();
+  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(now.getUTCDate()).padStart(2, '0');
+  const dateStr = `${yyyy}-${mm}-${dd}`;
+  const gvUrl = GLOBAL_VOICES_FEEDS[lang] || GLOBAL_VOICES_FEEDS.en;
+
+  const wmFeaturedUrl = `https://api.wikimedia.org/feed/v1/wikipedia/${lang}/featured/${yyyy}/${mm}/${dd}`;
+  const [gvResult, wmResult] = await Promise.allSettled([
+    fetchStreamLimitedText(gvUrl, 5000, 450 * 1024),
+    (async () => {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 4500);
+      try {
+        let r = await fetch(wmFeaturedUrl, {
+          signal: ctrl.signal,
+          headers: { 'User-Agent': 'FolioPress/0.7 (Educational Reader)' },
+        });
+        if (!r.ok) {
+          const prev = new Date(Date.now() - 86400 * 1000);
+          const py = prev.getUTCFullYear();
+          const pm = String(prev.getUTCMonth() + 1).padStart(2, '0');
+          const pd = String(prev.getUTCDate()).padStart(2, '0');
+          r = await fetch(`https://api.wikimedia.org/feed/v1/wikipedia/${lang}/featured/${py}/${pm}/${pd}`, {
+            signal: ctrl.signal,
+            headers: { 'User-Agent': 'FolioPress/0.7 (Educational Reader)' },
+          });
+        }
+        return r.ok ? await r.json() : null;
+      } finally {
+        clearTimeout(t);
+      }
+    })(),
+  ]);
+
+  const gvItems =
+    gvResult.status === 'fulfilled'
+      ? parseRssOrAtomFeed(gvResult.value, 'Global Voices Contributors')
+      : [];
+  const wmJson = wmResult.status === 'fulfilled' ? wmResult.value : null;
+
+  const culturalStories: any[] = [];
+  for (let i = 0; i < Math.min(4, gvItems.length); i++) {
+    const item = gvItems[i];
+    const chunks = chunkNewsProse(item.prose, 340);
+    const words = item.prose.split(/\s+/).filter(Boolean).length;
+    const preflightVocab = await extractKeyJournalisticWords(item.prose, lang, baseLangName);
+    culturalStories.push({
+      id: `news-${lang}-gv-${dateStr}-${i}`,
+      title: item.title,
+      author: `${item.author} · Global Voices`,
+      language: lang,
+      genre: 'essays',
+      source: 'news',
+      newsCategory: i === 0 ? 'lead' : 'world',
+      license: 'CC BY 3.0',
+      sourceUrl: item.link,
+      publishedAt: item.publishedAt,
+      coverImage: item.coverImage,
+      summary: item.prose.split(/\n/)[0].slice(0, 175) + '...',
+      chunks,
+      currentChunkIndex: 0,
+      wordCount: words,
+      estimatedReadTimeMinutes: Math.max(2, Math.round(words / 180)),
+      createdAt: Date.now(),
+      preflightVocab,
+    });
+  }
+
+  // Batch fetch full Wikimedia plain-text extracts for top trending cultural topics + 1 historical OnThisDay page
+  const rawMostRead: any[] = Array.isArray(wmJson?.mostread?.articles)
+    ? wmJson.mostread.articles.filter(
+        (a: any) =>
+          a?.title &&
+          !/:/.test(String(a.title)) &&
+          !/Main_Page|Pagina_principale|Portada|Accueil|Hauptseite|Anasayfa/i.test(String(a.title)) &&
+          (a?.extract || '').length > 60
+      )
+    : [];
+
+  const trendingCandidates = rawMostRead.slice(0, 3);
+  const onThisDayEvent = Array.isArray(wmJson?.onthisday) ? wmJson.onthisday[0] : null;
+  const historyPage = onThisDayEvent?.pages?.[0];
+
+  const wikiTitlesToExpand = [
+    ...trendingCandidates.map((a) => String(a.title)),
+    ...(historyPage?.title ? [String(historyPage.title)] : []),
+  ];
+
+  const expandedExtracts = new Map<string, string>();
+  if (wikiTitlesToExpand.length > 0) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 4000);
+      const batchUrl = `https://${lang}.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exchars=2400&titles=${encodeURIComponent(
+        wikiTitlesToExpand.join('|')
+      )}&format=json&origin=*`;
+      const exRes = await fetch(batchUrl, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (exRes.ok) {
+        const exJson = await exRes.json();
+        const pages = Object.values(exJson?.query?.pages || {}) as any[];
+        for (const p of pages) {
+          if (p?.title && p?.extract) {
+            const cleaned = String(p.extract).replace(/==+.*?==+/g, '').replace(/\n{3,}/g, '\n\n').trim();
+            expandedExtracts.set(String(p.title).replace(/_/g, ' '), cleaned);
+          }
+        }
+      }
+    } catch {
+      // Fallback safely to featured API extracts below
+    }
+  }
+
+  const trendingStories: any[] = [];
+  for (let i = 0; i < trendingCandidates.length; i++) {
+    const art = trendingCandidates[i];
+    const cleanTitle = String(art.titles?.normalized || art.title).replace(/_/g, ' ');
+    const fullProse = expandedExtracts.get(cleanTitle) || String(art.extract || '');
+    if (fullProse.length < 80) continue;
+    const chunks = chunkNewsProse(fullProse, 320);
+    const words = fullProse.split(/\s+/).filter(Boolean).length;
+    const preflightVocab = await extractKeyJournalisticWords(fullProse, lang, baseLangName);
+    trendingStories.push({
+      id: `news-${lang}-wm-${dateStr}-${i}`,
+      title: cleanTitle,
+      author: 'Trending Today · Wikipedia',
+      language: lang,
+      genre: 'history',
+      source: 'news',
+      newsCategory: 'trending',
+      license: 'CC BY-SA 4.0',
+      sourceUrl: art.content_urls?.desktop?.page,
+      publishedAt: Date.now(),
+      coverImage: art.thumbnail?.source,
+      summary: (art.description ? `${art.description} — ` : '') + fullProse.slice(0, 140) + '...',
+      chunks,
+      currentChunkIndex: 0,
+      wordCount: words,
+      estimatedReadTimeMinutes: Math.max(1, Math.round(words / 180)),
+      createdAt: Date.now(),
+      preflightVocab,
+    });
+  }
+
+  let onThisDayStory: any = null;
+  if (onThisDayEvent && (onThisDayEvent.text || historyPage?.extract)) {
+    const cleanHistTitle = String(historyPage?.titles?.normalized || historyPage?.title || `On This Day (${onThisDayEvent.year})`).replace(/_/g, ' ');
+    const histBody =
+      `${onThisDayEvent.year}: ${onThisDayEvent.text}\n\n` +
+      (expandedExtracts.get(cleanHistTitle) || historyPage?.extract || '');
+    const cleanedHist = histBody.trim();
+    const words = cleanedHist.split(/\s+/).filter(Boolean).length;
+    onThisDayStory = {
+      id: `news-${lang}-otd-${dateStr}`,
+      title: `${onThisDayEvent.year} — ${cleanHistTitle}`,
+      author: 'Historical Chronicle · Wikimedia',
+      language: lang,
+      genre: 'history',
+      source: 'news',
+      newsCategory: 'history',
+      license: 'CC BY-SA 4.0',
+      sourceUrl: historyPage?.content_urls?.desktop?.page,
+      publishedAt: Date.now(),
+      coverImage: historyPage?.thumbnail?.source,
+      summary: String(onThisDayEvent.text || '').slice(0, 175),
+      chunks: chunkNewsProse(cleanedHist, 300),
+      currentChunkIndex: 0,
+      wordCount: words,
+      estimatedReadTimeMinutes: Math.max(1, Math.round(words / 180)),
+      createdAt: Date.now(),
+      preflightVocab: await extractKeyJournalisticWords(cleanedHist, lang, baseLangName),
+    };
+  }
+
+  // Ensure leadStory always exists even if Global Voices returned 0 (fallback to trending or onThisDay)
+  const leadStory = culturalStories[0] || trendingStories[0] || onThisDayStory;
+  if (!leadStory) {
+    throw new Error(`No daily news content retrieved for language: ${lang}`);
+  }
+
+  const cachedAt = Date.now();
+  return {
+    date: dateStr,
+    editionTitle: LOCALIZED_EDITION_TITLES[lang] || 'Morning Edition',
+    language: lang,
+    leadStory,
+    culturalStories: culturalStories.slice(1),
+    trendingStories,
+    onThisDayStory,
+    cachedAt,
+    expiresAt: cachedAt + NEWS_CACHE_TTL_MS,
+  };
+}
+
+// 5A. Daily Edition News Endpoint (6-Hour Temporal Slot LRU Cache + Coalesced Upstream Fetch)
+app.get('/api/news/daily', async (req: Request, res: Response): Promise<void> => {
+  const lang = resolveIsoCode(String(req.query.lang || 'it'), 'it').slice(0, 2);
+  const baseLang = String(req.query.baseLang || 'English');
+  const forceRefresh = req.query.refresh === '1';
+
+  const now = new Date();
+  const slot = Math.floor(now.getUTCHours() / 6);
+  const dateKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(
+    now.getUTCDate()
+  ).padStart(2, '0')}`;
+  const editionKey = `${lang}:${dateKey}:slot_${slot}:${baseLang}`;
+
+  if (!forceRefresh) {
+    const cached = getServerCache(serverNewsCache, editionKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      res.json({ success: true, edition: cached, cached: true });
+      return;
+    }
+  }
+
+  try {
+    let promise = newsFetchInFlight.get(editionKey);
+    if (!promise) {
+      promise = buildDailyNewsEdition(lang, baseLang);
+      newsFetchInFlight.set(editionKey, promise);
+    }
+    const edition = await promise;
+    setServerCache(serverNewsCache, editionKey, edition, 24);
+    serverNewsLastValidByLang.set(lang, edition);
+    res.json({ success: true, edition, cached: false });
+  } catch (err: any) {
+    console.warn(`Daily news fetch failed for ${lang}, checking stale edition:`, err?.message || err);
+    const stale = serverNewsLastValidByLang.get(lang);
+    if (stale) {
+      res.json({ success: true, edition: { ...stale, stale: true }, cached: true, stale: true });
+      return;
+    }
+    res.status(502).json({ error: 'Daily news feeds are temporarily unavailable.' });
+  } finally {
+    newsFetchInFlight.delete(editionKey);
+  }
+});
+
+// 5B. SSRF-Safe Custom RSS/Atom Feed Importer
+app.post('/api/news/custom-feed', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { feedUrl, lang = 'it', baseLang = 'English' } = req.body || {};
+    if (!feedUrl || typeof feedUrl !== 'string') {
+      res.status(400).json({ error: 'A valid RSS/Atom feed URL is required.' });
+      return;
+    }
+
+    const safeUrl = await assertSafeExternalUrl(feedUrl.trim());
+    const xml = await fetchStreamLimitedText(safeUrl.toString(), 6000, 500 * 1024);
+    const parsedItems = parseRssOrAtomFeed(xml, safeUrl.hostname);
+
+    if (parsedItems.length === 0) {
+      res.status(422).json({ error: 'No readable full-text RSS/Atom items found at this feed URL.' });
+      return;
+    }
+
+    const articles = await mapWithConcurrency(parsedItems.slice(0, 6), 3, async (item, idx) => {
+      const words = item.prose.split(/\s+/).filter(Boolean).length;
+      const preflightVocab = await extractKeyJournalisticWords(item.prose, lang, baseLang);
+      return {
+        id: `news-rss-${Date.now()}-${idx}`,
+        title: item.title,
+        author: `${item.author} (${safeUrl.hostname})`,
+        language: lang,
+        genre: 'essays',
+        source: 'news',
+        newsCategory: 'custom',
+        license: 'Custom RSS Feed',
+        sourceUrl: item.link || safeUrl.toString(),
+        publishedAt: item.publishedAt,
+        coverImage: item.coverImage,
+        summary: item.prose.split(/\n/)[0].slice(0, 175) + '...',
+        chunks: chunkNewsProse(item.prose, 340),
+        currentChunkIndex: 0,
+        wordCount: words,
+        estimatedReadTimeMinutes: Math.max(1, Math.round(words / 180)),
+        createdAt: Date.now(),
+        preflightVocab,
+      };
+    });
+
+    res.json({ success: true, articles, sourceHost: safeUrl.hostname });
+  } catch (err: any) {
+    res.status(400).json({ error: err?.message || 'Failed to parse external RSS feed.' });
   }
 });
 
@@ -941,7 +1763,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`FolioLingo full-stack server running on http://0.0.0.0:${PORT} (mode: ${isProd ? 'production' : 'development'})`);
+    console.log(`FolioPress full-stack server running on http://0.0.0.0:${PORT} (mode: ${isProd ? 'production' : 'development'})`);
   });
 }
 

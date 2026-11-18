@@ -18,8 +18,15 @@ const localConfigModules = import.meta.glob<{ default?: FirebaseAppletConfig }>(
   { eager: true }
 );
 
+const PLACEHOLDER_VALUES = new Set([
+  'YOUR_FIREBASE_API_KEY',
+  'YOUR_PROJECT_ID',
+  'AIzaSyDWwW_t3osMv2EtSVsTCCufOEcz_pLgbB8',
+]);
+
 function isUsableValue(val?: string): val is string {
-  return Boolean(val && val.trim() && !val.trim().startsWith('YOUR_'));
+  const trimmed = val?.trim();
+  return Boolean(trimmed && !trimmed.startsWith('YOUR_') && !PLACEHOLDER_VALUES.has(trimmed));
 }
 
 function resolveFirebaseConfig(): FirebaseAppletConfig | null {

@@ -12,6 +12,7 @@ import { Flashcard, ReadingLogEntry, SocialUser, UserProfile } from '../types/in
 import { SUPPORTED_LANGUAGES } from '../data/constants.ts';
 import { socialService } from '../services/socialService.ts';
 import { storageService } from '../services/storageService.ts';
+import { isFirebaseConfigured } from '../lib/firebase.ts';
 
 interface SocialLeagueViewProps {
   onOpenSettings: () => void;
@@ -26,7 +27,7 @@ export const SocialLeagueView: React.FC<SocialLeagueViewProps> = ({
   const [profile, setProfile] = useState<UserProfile>(storageService.getUserProfile());
   const [readingLogs, setReadingLogs] = useState<ReadingLogEntry[]>([]);
   const [allFlashcards, setAllFlashcards] = useState<Flashcard[]>([]);
-  const [activeTab, setActiveTab] = useState<'league' | 'feed' | 'analytics'>('league');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'league' | 'feed'>('analytics');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -94,28 +95,8 @@ export const SocialLeagueView: React.FC<SocialLeagueViewProps> = ({
           </h1>
         </div>
 
-        {/* Sub-Tabs */}
+        {/* Sub-Tabs (Personal Analytics first, Demo Peer views secondary) */}
         <div className="flex items-center p-1 bg-stone-100 dark:bg-stone-900 rounded-lg border border-stone-200/60 dark:border-stone-800/60 self-start sm:self-auto">
-          <button
-            onClick={() => setActiveTab('league')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
-              activeTab === 'league'
-                ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-xs'
-                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
-            }`}
-          >
-            Weekly League
-          </button>
-          <button
-            onClick={() => setActiveTab('feed')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
-              activeTab === 'feed'
-                ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-xs'
-                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
-            }`}
-          >
-            Reading Feed
-          </button>
           <button
             onClick={() => setActiveTab('analytics')}
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
@@ -125,6 +106,26 @@ export const SocialLeagueView: React.FC<SocialLeagueViewProps> = ({
             }`}
           >
             Analytics & Log
+          </button>
+          <button
+            onClick={() => setActiveTab('league')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+              activeTab === 'league'
+                ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-xs'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
+            }`}
+          >
+            League (AI Peers)
+          </button>
+          <button
+            onClick={() => setActiveTab('feed')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+              activeTab === 'feed'
+                ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-xs'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
+            }`}
+          >
+            Activity Feed
           </button>
         </div>
       </div>
@@ -401,7 +402,7 @@ export const SocialLeagueView: React.FC<SocialLeagueViewProps> = ({
                 </h3>
               </div>
               <span className="text-xs font-mono text-stone-400">
-                Synced with Firestore (/reading_logs)
+                {isFirebaseConfigured ? 'Synced with Firestore (/reading_logs)' : 'Stored Locally in Browser'}
               </span>
             </div>
 

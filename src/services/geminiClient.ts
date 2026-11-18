@@ -18,7 +18,14 @@ export interface SectionQuiz {
 }
 
 const PERSISTENT_WORD_CACHE_KEY = 'foliolingo_word_cache_v4';
-const PERSISTENT_SENTENCE_CACHE_KEY = 'foliolingo_sentence_cache_v4';
+const PERSISTENT_SENTENCE_CACHE_KEY = 'foliolingo_sentence_cache_v6';
+
+export function splitParagraphIntoSentences(paragraph: string): string[] {
+  const trimmed = paragraph.trim();
+  if (!trimmed) return [];
+  const matches = trimmed.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g);
+  return (matches || [trimmed]).map((s) => s.trim()).filter(Boolean);
+}
 
 class GeminiClientService {
   // L1 In-memory cache for 0ms word lookups
@@ -190,14 +197,11 @@ class GeminiClientService {
     this.prefetchedSections.add(sectionSignature);
 
     try {
-      // Extract unique sentences from section
-      const rawSentences = sectionText
-        .split(/\n\s*\n/)
-        .flatMap((para) => para.trim().match(/[^.!?]+[.!?]+|\S+/g) || [])
-        .map((s) => s.trim())
-        .filter((s) => s.length > 3);
+      // Extract unique sentences AND full paragraphs from section so Parallel Bilingual Mode never misses
+      const paragraphs = sectionText.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+      const rawSentences = paragraphs.flatMap((para) => splitParagraphIntoSentences(para)).filter((s) => s.length > 2);
 
-      const uniqueSentences = Array.from(new Set(rawSentences)).slice(0, 18);
+      const uniqueSentences = Array.from(new Set([...paragraphs, ...rawSentences])).slice(0, 42);
 
       // Extract top content words (length >= 4) not yet in sessionWordCache
       const candidateWords: { word: string; sentence: string }[] = [];
@@ -279,6 +283,79 @@ class GeminiClientService {
     } catch {
       // Silent background prefetch failure is non-blocking
     }
+  }
+
+  /**
+   * Explicitly translate paragraphs & uncached sentences on demand for Parallel Bilingual Mode
+   */
+  public async translateParagraphs(
+    paragraphs: string[],
+    targetLangName: string,
+    baseLangName: string
+  ): Promise<Record<string, string>> {
+    const cleanParagraphs = paragraphs.map((p) => p.trim()).filter(Boolean);
+    const resolved: Record<string, string> = {};
+    const missing: string[] = [];
+
+    for (const para of cleanParagraphs) {
+      const directCached = this.getCachedSentenceTranslation(para, baseLangName);
+      if (directCached) {
+        resolved[para] = directCached;
+        continue;
+      }
+      const sents = splitParagraphIntoSentences(para);
+      if (sents.length > 0 && sents.every((s) => this.getCachedSentenceTranslation(s, baseLangName))) {
+        resolved[para] = sents.map((s) => this.getCachedSentenceTranslation(s, baseLangName)).join(' ');
+        continue;
+      }
+      missing.push(para);
+    }
+
+    if (missing.length === 0) {
+      return resolved;
+    }
+
+    try {
+      const res = await fetch('/api/gemini/batch-prefetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sentences: missing.slice(0, 40),
+          words: [],
+          targetLang: targetLangName,
+          baseLang: baseLangName,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.sentences && typeof data.sentences === 'object') {
+          for (const [orig, trans] of Object.entries(data.sentences)) {
+            if (typeof trans === 'string' && trans) {
+              this.sentenceCache.set(this.buildSentenceCacheKey(orig, baseLangName), trans);
+              resolved[orig] = trans;
+            }
+          }
+          this.persistCaches();
+        }
+      }
+    } catch {
+      // Ignore network errors
+    }
+
+    // Fallback to sentence concatenation if still partially resolved
+    for (const para of cleanParagraphs) {
+      if (!resolved[para]) {
+        const sents = splitParagraphIntoSentences(para);
+        const sentTranslations = sents
+          .map((s) => this.getCachedSentenceTranslation(s, baseLangName))
+          .filter(Boolean);
+        if (sentTranslations.length > 0) {
+          resolved[para] = sentTranslations.join(' ');
+        }
+      }
+    }
+
+    return resolved;
   }
 
   /**
@@ -508,20 +585,26 @@ class GeminiClientService {
     targetLangName: string,
     level: CEFRLevel
   ): Promise<string> {
-    if (level === 'Original' || !costTelemetry.canPerformGeminiCall()) return text;
-    const customApiKey = costTelemetry.getCustomGeminiApiKey() || undefined;
+    if (level === 'Original') return text;
+    const allowGemini = costTelemetry.canPerformGeminiCall();
+    const customApiKey = allowGemini ? costTelemetry.getCustomGeminiApiKey() || undefined : undefined;
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 9000);
     try {
       const res = await fetch('/api/gemini/adapt-cefr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           text,
           targetLang: targetLangName,
           level,
           customApiKey,
+          preferFallback: !allowGemini,
         }),
       });
+      clearTimeout(timeout);
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -529,11 +612,12 @@ class GeminiClientService {
       }
 
       const data = await res.json();
-      if (data.adaptedText) {
+      if (data.adaptedText && data.sourceEngine !== 'heuristic-cefr' && allowGemini) {
         costTelemetry.recordLookupSource('gemini');
       }
       return data.adaptedText || text;
     } catch (err) {
+      clearTimeout(timeout);
       console.warn('Gemini CEFR adapt failed, returning original text:', err);
       return text;
     }

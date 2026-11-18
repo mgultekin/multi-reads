@@ -25,7 +25,18 @@ export interface GenreInfo {
 
 export type CEFRLevel = 'Original' | 'A1' | 'A2' | 'B1' | 'B2' | 'C1';
 
-export type ContentSource = 'gutenberg' | 'wikipedia' | 'custom';
+export type ContentSource = 'gutenberg' | 'wikipedia' | 'custom' | 'news';
+
+export type NewsCategory = 'lead' | 'world' | 'culture' | 'trending' | 'history' | 'custom';
+export type ContentLicense = 'CC BY 3.0' | 'CC BY-SA 4.0' | 'Public Domain' | 'Custom RSS Feed';
+
+export interface PreFlightWord {
+  word: string;
+  lemma: string;
+  partOfSpeech: string;
+  translation: string;
+  cefrHint?: string;
+}
 
 export interface ContentItem {
   id: string;
@@ -43,6 +54,28 @@ export interface ContentItem {
   createdAt: number;
   lastReadAt?: number;
   cefrCache?: Record<string, string>; // key: `${chunkIndex}_${level}` -> text
+  // Optional Morning Edition / News metadata
+  sourceUrl?: string;
+  publishedAt?: number;
+  license?: ContentLicense | string;
+  newsCategory?: NewsCategory;
+  preflightVocab?: PreFlightWord[];
+  // Full Novel & Project Gutenberg archive metadata
+  isFullNovel?: boolean;
+  gutenbergId?: number;
+}
+
+export interface DailyNewsEdition {
+  date: string; // YYYY-MM-DD
+  editionTitle: string; // Localized e.g. Edizione Mattutina
+  language: LanguageCode;
+  leadStory: ContentItem;
+  culturalStories: ContentItem[];
+  trendingStories: ContentItem[];
+  onThisDayStory: ContentItem | null;
+  cachedAt: number;
+  expiresAt: number;
+  stale?: boolean;
 }
 
 export interface WordBreakdown {
