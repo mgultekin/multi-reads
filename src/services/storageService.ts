@@ -166,8 +166,13 @@ class StorageService {
   async saveBook(book: ContentItem): Promise<void> {
     try {
       const db = await this.initDb();
-      const tx = db.transaction('books', 'readwrite');
-      tx.objectStore('books').put(book);
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('books', 'readwrite');
+        tx.objectStore('books').put(book);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
     } catch {
       // fallback below
     }

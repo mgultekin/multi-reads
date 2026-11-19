@@ -18,11 +18,26 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'library' | 'reader' | 'wordbook' | 'social'>('library');
   const [targetLang, setTargetLang] = useState<LanguageCode>(profile.targetLanguage || 'es');
   const [currentBook, setCurrentBook] = useState<ContentItem | null>(null);
+  const [books, setBooks] = useState<ContentItem[]>([]);
+  const [savedWordsCount, setSavedWordsCount] = useState<number>(0);
+  const [dueWordsCount, setDueWordsCount] = useState<number>(0);
   const [theme, setTheme] = useState<'light' | 'dark'>(profile.theme || 'light');
   const [isImporterOpen, setIsImporterOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isFocusMode, setIsFocusMode] = useState(false);
+
+  // Global Cmd/Ctrl + K Discover & Import shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsImporterOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Apply theme to document element
   useEffect(() => {
@@ -59,13 +74,33 @@ export default function App() {
     };
   }, []);
 
-  // Load initial book for target language (preferring most recently read)
+  // Load initial book, catalog & flashcard counts for target language
   useEffect(() => {
     loadDefaultBookForLang(targetLang);
   }, [targetLang]);
 
+  useEffect(() => {
+    refreshAppStats(targetLang);
+  }, [targetLang, activeTab]);
+
+  const refreshAppStats = async (lang: LanguageCode = targetLang) => {
+    try {
+      const [allBooks, cards] = await Promise.all([
+        storageService.getBooks(),
+        storageService.getFlashcards(lang),
+      ]);
+      setBooks(allBooks);
+      setSavedWordsCount(cards.length);
+      const now = Date.now();
+      setDueWordsCount(cards.filter((c) => (c.nextReviewAt || 0) <= now && c.masteryLevel < 5).length);
+    } catch (err) {
+      console.warn('Failed to refresh library/wordbook stats:', err);
+    }
+  };
+
   const loadDefaultBookForLang = async (lang: LanguageCode) => {
     const allBooks = await storageService.getBooks();
+    setBooks(allBooks);
     const langBooks = allBooks.filter((b) => b.language === lang);
     if (langBooks.length > 0) {
       const sorted = [...langBooks].sort((a, b) => (b.lastReadAt || 0) - (a.lastReadAt || 0));
@@ -122,6 +157,7 @@ export default function App() {
   const handleAwardXP = async (xpAmount: number) => {
     const updated = await socialService.awardXP(xpAmount);
     setProfile(updated);
+    refreshAppStats(targetLang);
 
     if (currentUser) {
       firebaseSyncService.syncReadingProgress(currentUser.uid, updated);
@@ -132,6 +168,7 @@ export default function App() {
     setCurrentBook(newBook);
     setTargetLang(newBook.language);
     setActiveTab('reader');
+    refreshAppStats(newBook.language);
   };
 
   const handleSignInWithGoogle = async () => {
@@ -158,8 +195,8 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FBF9F5] dark:bg-[#141312] text-[#1C1917] dark:text-[#F5F2EB] flex flex-col font-sans transition-colors selection:bg-amber-200 selection:text-amber-900">
-      {/* 3-Zone Top Navigation Bar with Dual Language Selectors & Firebase Auth */}
+    <div className="min-h-screen bg-[var(--bg-paper,#F5F5F7)] dark:bg-[#0A0A0C] text-[var(--text-ink,#1D1D1F)] dark:text-[#F5F5F7] flex flex-col font-sans transition-colors selection:bg-amber-200 selection:text-amber-900">
+      {/* 3-Zone Frosted Top Navigation Bar with Apple Mastery Ring */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={handleTabChange}
@@ -177,6 +214,10 @@ export default function App() {
         isHidden={isFocusMode && activeTab === 'reader'}
         onSignInWithGoogle={handleSignInWithGoogle}
         onSignOut={handleSignOut}
+        wordsReadToday={profile.wordsReadToday || 0}
+        dailyWordGoal={profile.dailyWordGoal || 500}
+        savedWordsCount={savedWordsCount}
+        onOpenDiscover={() => setIsImporterOpen(true)}
       />
 
       {/* Primary Dynamic View Content */}
@@ -186,6 +227,9 @@ export default function App() {
             targetLang={targetLang}
             onSelectBook={handleSelectBook}
             onOpenImporter={() => setIsImporterOpen(true)}
+            onOpenWordbook={() => handleTabChange('wordbook')}
+            savedWordsCount={savedWordsCount}
+            dueWordsCount={dueWordsCount}
           />
         )}
 
@@ -208,6 +252,9 @@ export default function App() {
               setProfile(updated);
               storageService.saveUserProfile(updated);
             }}
+            wordsReadToday={profile.wordsReadToday || 0}
+            dailyWordGoal={profile.dailyWordGoal || 500}
+            onOpenWordbook={() => handleTabChange('wordbook')}
           />
         )}
 
@@ -227,12 +274,22 @@ export default function App() {
         )}
       </div>
 
-      {/* Custom Content Importer Modal */}
+      {/* Unified Discover & Import Modal (Cmd/Ctrl+K) */}
       <ImportModal
         isOpen={isImporterOpen}
-        onClose={() => setIsImporterOpen(false)}
+        onClose={() => {
+          setIsImporterOpen(false);
+          refreshAppStats(targetLang);
+        }}
         targetLang={targetLang}
         onImportComplete={handleImportComplete}
+        books={books}
+        onSelectBook={(book) => {
+          handleSelectBook(book);
+          setIsImporterOpen(false);
+        }}
+        initialGenre="all"
+        onBooksUpdated={() => refreshAppStats(targetLang)}
       />
 
       {/* System Settings Modal */}

@@ -1107,7 +1107,234 @@ app.get('/api/gutenberg/search', async (req: Request, res: Response): Promise<vo
   res.json({ success: true, results: finalItems, source: 'fallback-catalog' });
 });
 
-// 4. Server-Side Project Gutenberg Full-Text Proxy (Eliminates CORS errors)
+// 4. Multi-Mirror Geo-Resilient Public-Domain Full-Text Proxy ($0.00 Stack)
+// Cascade: GITenberg (GitHub CDN) -> Internet Archive -> Direct Gutenberg Mirrors
+const serverGutenbergTextCache = new Map<string, { text: string; mirror: string }>();
+
+function decodeGutenbergBuffer(buf: ArrayBuffer, filenameHint: string = ''): string {
+  const bytes = new Uint8Array(buf);
+  const prefersLatin1 = /-8\.txt$/i.test(filenameHint);
+  if (!prefersLatin1) {
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+      // Fallback to Windows-1252 / ISO-8859-1 below
+    }
+  }
+  try {
+    return new TextDecoder('windows-1252').decode(bytes);
+  } catch {
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+}
+
+function cleanAndUnwrapGutenbergText(rawText: string): string {
+  let normalized = rawText.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+
+  const startIdx = normalized.search(/\*\*\* ?START OF (?:THE|THIS) PROJECT GUTENBERG EBOOK/i);
+  if (startIdx !== -1) {
+    normalized = normalized.substring(startIdx).replace(/^\*\*\*[^\n]*\*\*\*[^\n]*\n?/, '');
+  } else {
+    const legacyStart = normalized.search(/\*END\*THE SMALL PRINT![^\n]*\n/i);
+    if (legacyStart !== -1) {
+      normalized = normalized.substring(legacyStart).replace(/^\*END\*[^\n]*\n?/i, '');
+    }
+  }
+
+  const endIdx = normalized.search(/\*\*\* ?END OF (?:THE|THIS) PROJECT GUTENBERG EBOOK/i);
+  if (endIdx !== -1) {
+    normalized = normalized.substring(0, endIdx);
+  } else {
+    const legacyEnd = normalized.search(/End of(?: the)? Project Gutenberg EBook/i);
+    if (legacyEnd !== -1) {
+      normalized = normalized.substring(0, legacyEnd);
+    }
+  }
+
+  const headingRegex =
+    /^(Cap[íi]tulo|Chapitre|Kapitel|Capitolo|B[öo]l[üu]m|Chapter|Part|Parte|Libro|Livre|Book)\b/i;
+
+  const paragraphs = normalized
+    .trim()
+    .split(/\n\s*\n+/)
+    .map((block) => {
+      const lines = block
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+      if (lines.length === 0) return '';
+      if (lines.length === 1) return lines[0];
+      if (lines.length <= 3 && headingRegex.test(lines[0]) && lines[0].length < 80) {
+        return lines.join(' — ');
+      }
+      return lines.join(' ').replace(/\s{2,}/g, ' ').trim();
+    })
+    .filter(Boolean);
+
+  return paragraphs.join('\n\n');
+}
+
+async function fetchFromGitenberg(rawId: string): Promise<{ text: string; mirror: string } | null> {
+  try {
+    const searchUrl = `https://api.github.com/search/repositories?q=${encodeURIComponent(
+      `org:GITenberg _${rawId} in:name`
+    )}&per_page=10`;
+    const searchResp = await fetch(searchUrl, {
+      signal: AbortSignal.timeout(7000),
+      headers: {
+        'User-Agent': 'FolioPress/0.6 (Language Learning Reader)',
+        Accept: 'application/vnd.github+json',
+      },
+    });
+    if (!searchResp.ok) return null;
+
+    const searchData: any = await searchResp.json();
+    const repo = (searchData?.items || []).find(
+      (item: any) => typeof item?.name === 'string' && item.name.endsWith(`_${rawId}`)
+    );
+    if (!repo?.full_name) return null;
+
+    const contentsResp = await fetch(
+      `https://api.github.com/repos/${repo.full_name}/contents`,
+      {
+        signal: AbortSignal.timeout(7000),
+        headers: {
+          'User-Agent': 'FolioPress/0.6 (Language Learning Reader)',
+          Accept: 'application/vnd.github+json',
+        },
+      }
+    );
+    if (!contentsResp.ok) return null;
+
+    const files: any[] = await contentsResp.json();
+    if (!Array.isArray(files)) return null;
+
+    const ignoredName = /(readme|license|contributing|metadata|notes|changes)/i;
+    const txtFiles = files.filter(
+      (f) =>
+        f?.type === 'file' &&
+        typeof f?.name === 'string' &&
+        /\.txt$/i.test(f.name) &&
+        !ignoredName.test(f.name) &&
+        (f.size || 0) > 2000 &&
+        typeof f?.download_url === 'string'
+    );
+    if (txtFiles.length === 0) return null;
+
+    const preferred =
+      txtFiles.find((f) => /-0\.txt$/i.test(f.name)) ||
+      txtFiles.find((f) => /-8\.txt$/i.test(f.name)) ||
+      txtFiles.sort((a, b) => (b.size || 0) - (a.size || 0))[0];
+
+    const rawResp = await fetch(preferred.download_url, {
+      signal: AbortSignal.timeout(15000),
+      headers: { 'User-Agent': 'FolioPress/0.6 (Language Learning Reader)' },
+    });
+    if (!rawResp.ok) return null;
+
+    const decoded = decodeGutenbergBuffer(await rawResp.arrayBuffer(), preferred.name);
+    if (decoded.length > 400) {
+      return { text: decoded, mirror: `GITenberg (${repo.full_name}/${preferred.name})` };
+    }
+  } catch {
+    // Fall through to next mirror
+  }
+  return null;
+}
+
+async function fetchFromInternetArchive(rawId: string): Promise<{ text: string; mirror: string } | null> {
+  try {
+    const padded = rawId.padStart(5, '0');
+    const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(
+      `collection:gutenberg AND identifier:*${padded}gut`
+    )}&fl[]=identifier,title&output=json&rows=5`;
+    const searchResp = await fetch(searchUrl, {
+      signal: AbortSignal.timeout(8000),
+      headers: { 'User-Agent': 'FolioPress/0.6 (Language Learning Reader)' },
+    });
+    if (!searchResp.ok) return null;
+
+    const searchData: any = await searchResp.json();
+    const docs: any[] = searchData?.response?.docs || [];
+    for (const doc of docs) {
+      if (!doc?.identifier) continue;
+      try {
+        const metaResp = await fetch(
+          `https://archive.org/metadata/${encodeURIComponent(doc.identifier)}/files`,
+          {
+            signal: AbortSignal.timeout(8000),
+            headers: { 'User-Agent': 'FolioPress/0.6 (Language Learning Reader)' },
+          }
+        );
+        if (!metaResp.ok) continue;
+
+        const metaData: any = await metaResp.json();
+        const files: any[] = metaData?.result || [];
+        const txtCandidates = files.filter(
+          (f) =>
+            typeof f?.name === 'string' &&
+            /\.txt$/i.test(f.name) &&
+            !f.name.includes('_djvu') &&
+            !f.name.includes('_meta')
+        );
+        if (txtCandidates.length === 0) continue;
+
+        const chosen =
+          txtCandidates.find((f) => /-0\.txt$/i.test(f.name)) ||
+          txtCandidates.find((f) => /-8\.txt$/i.test(f.name)) ||
+          txtCandidates[0];
+
+        const dlUrl = `https://archive.org/download/${encodeURIComponent(
+          doc.identifier
+        )}/${encodeURIComponent(chosen.name)}`;
+        const dlResp = await fetch(dlUrl, {
+          signal: AbortSignal.timeout(15000),
+          headers: { 'User-Agent': 'FolioPress/0.6 (Language Learning Reader)' },
+        });
+        if (!dlResp.ok) continue;
+
+        const decoded = decodeGutenbergBuffer(await dlResp.arrayBuffer(), chosen.name);
+        if (decoded.length > 400) {
+          return { text: decoded, mirror: `Internet Archive (${doc.identifier}/${chosen.name})` };
+        }
+      } catch {
+        // Try next Archive item
+      }
+    }
+  } catch {
+    // Fall through to direct Gutenberg
+  }
+  return null;
+}
+
+async function fetchFromDirectGutenberg(rawId: string): Promise<{ text: string; mirror: string } | null> {
+  const candidateUrls = [
+    `https://www.gutenberg.org/cache/epub/${rawId}/pg${rawId}.txt`,
+    `https://www.gutenberg.org/files/${rawId}/${rawId}-0.txt`,
+    `https://www.gutenberg.org/files/${rawId}/${rawId}-8.txt`,
+    `https://www.gutenberg.org/files/${rawId}/${rawId}.txt`,
+    `https://www.gutenberg.org/ebooks/${rawId}.txt.utf-8`,
+  ];
+
+  for (const url of candidateUrls) {
+    try {
+      const resp = await fetch(url, {
+        signal: AbortSignal.timeout(3500),
+        headers: { 'User-Agent': 'FolioPress/0.6 (Language Learning Reader)' },
+      });
+      if (resp.ok) {
+        const decoded = decodeGutenbergBuffer(await resp.arrayBuffer(), url);
+        if (decoded.length > 400) {
+          return { text: decoded, mirror: `Project Gutenberg (${url})` };
+        }
+      }
+    } catch {
+      // Try next URL
+    }
+  }
+  return null;
+}
+
 app.get('/api/gutenberg/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const rawId = String(req.params.id || '').replace(/[^0-9]/g, '');
@@ -1116,51 +1343,39 @@ app.get('/api/gutenberg/:id', async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const candidateUrls = [
-      `https://www.gutenberg.org/cache/epub/${rawId}/pg${rawId}.txt`,
-      `https://www.gutenberg.org/files/${rawId}/${rawId}-0.txt`,
-      `https://www.gutenberg.org/files/${rawId}/${rawId}.txt`,
-    ];
-
-    let fullText = '';
-    for (const url of candidateUrls) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        const resp = await fetch(url, {
-          signal: controller.signal,
-          headers: { 'User-Agent': 'FolioPress/0.5 (Language Learning Reader)' },
-        });
-        clearTimeout(timeout);
-        if (resp.ok) {
-          const text = await resp.text();
-          if (text && text.length > 400) {
-            fullText = text;
-            break;
-          }
-        }
-      } catch {
-        // try next mirror
-      }
-    }
-
-    if (!fullText) {
-      res.status(404).json({ error: 'Manuscript text not found on Gutenberg mirrors.' });
+    const cached = getServerCache(serverGutenbergTextCache, rawId);
+    if (cached) {
+      res.json({ success: true, text: cached.text, mirror: cached.mirror, cached: true });
       return;
     }
 
-    // Strip Project Gutenberg header and footer boilerplate
-    const startIdx = fullText.search(/\*\*\* ?START OF (THE|THIS) PROJECT GUTENBERG EBOOK/i);
-    let cleaned = startIdx !== -1 ? fullText.substring(startIdx) : fullText;
-    const endIdx = cleaned.search(/\*\*\* ?END OF (THE|THIS) PROJECT GUTENBERG EBOOK/i);
-    if (endIdx !== -1) {
-      cleaned = cleaned.substring(0, endIdx);
-    }
-    cleaned = cleaned.replace(/^\*\*\*.*?\*\*\*/m, '').trim();
+    const result =
+      (await fetchFromGitenberg(rawId)) ||
+      (await fetchFromInternetArchive(rawId)) ||
+      (await fetchFromDirectGutenberg(rawId));
 
-    // Support complete multi-chapter novel manuscripts up to ~450,000 characters
-    const excerpt = cleaned.slice(0, 450000);
-    res.json({ success: true, text: excerpt });
+    if (!result) {
+      console.warn(`[Gutenberg] All remote mirrors unavailable for #${rawId}`);
+      res.status(502).json({
+        error:
+          'Remote Gutenberg mirrors are currently unreachable from this network. Check connection or read a bundled Full Novel edition.',
+      });
+      return;
+    }
+
+    const cleaned = cleanAndUnwrapGutenbergText(result.text);
+    // Support complete multi-chapter novel manuscripts up to ~450,000 chars, cut cleanly on paragraph boundary
+    let excerpt = cleaned.slice(0, 450000);
+    if (cleaned.length > 450000) {
+      const lastBreak = excerpt.lastIndexOf('\n\n');
+      if (lastBreak > 200000) {
+        excerpt = excerpt.slice(0, lastBreak);
+      }
+    }
+
+    console.log(`[Gutenberg] Loaded #${rawId} (${excerpt.length} chars) via ${result.mirror}`);
+    setServerCache(serverGutenbergTextCache, rawId, { text: excerpt, mirror: result.mirror }, 24);
+    res.json({ success: true, text: excerpt, mirror: result.mirror });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to fetch Gutenberg text.' });
   }

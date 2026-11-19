@@ -3,20 +3,22 @@
 
 @layer base {
   :root {
-    --bg-paper: #FAF8F4;
-    --bg-card: #FAF8F4;
-    --text-ink: #18181B;
-    --text-muted: #71717A;
-    --border-paper: #E7E5E4;
+    --bg-paper: #F5F5F7;
+    --bg-card: #FFFFFF;
+    --text-ink: #1D1D1F;
+    --text-muted: #6E6E73;
+    --border-paper: rgba(0, 0, 0, 0.08);
+    --accent-apple: #0071E3;
     --accent-terracotta: #9A3412;
   }
 
   .dark {
-    --bg-paper: #141312;
-    --bg-card: #141312;
-    --text-ink: #F4F4F5;
-    --text-muted: #A1A1AA;
-    --border-paper: #27272A;
+    --bg-paper: #0A0A0C;
+    --bg-card: #16161A;
+    --text-ink: #F5F5F7;
+    --text-muted: #98989D;
+    --border-paper: rgba(255, 255, 255, 0.1);
+    --accent-apple: #0A84FF;
     --accent-terracotta: #D97706;
   }
 
@@ -28,26 +30,65 @@
   body {
     background-color: var(--bg-paper);
     color: var(--text-ink);
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Plus Jakarta Sans', system-ui, sans-serif;
   }
 
   ::selection {
-    background-color: rgba(154, 52, 18, 0.14);
+    background-color: rgba(0, 113, 227, 0.18);
     color: inherit;
   }
 
   .dark ::selection {
-    background-color: rgba(217, 119, 6, 0.28);
+    background-color: rgba(10, 132, 255, 0.3);
     color: inherit;
   }
 }
 
 .font-reader {
-  font-family: 'Source Serif 4', Georgia, Cambria, 'Times New Roman', Times, serif;
+  font-family: 'New York', 'Source Serif 4', Georgia, Cambria, 'Times New Roman', Times, serif;
 }
 
 .font-display {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'New York', 'Playfair Display', Georgia, serif;
+}
+
+/* Apple Translucent Glass Utilities */
+.apple-glass-nav {
+  background-color: rgba(245, 245, 247, 0.78);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+.dark .apple-glass-nav {
+  background-color: rgba(10, 10, 12, 0.78);
+}
+
+.apple-glass-card {
+  background-color: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 12px 36px -14px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.dark .apple-glass-card {
+  background-color: rgba(22, 22, 26, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 18px 44px -14px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+/* Progressive bottom frosted scrim over full-bleed photographic genre squares */
+.apple-tile-frost {
+  background: linear-gradient(
+    to top,
+    rgba(10, 10, 14, 0.88) 0%,
+    rgba(10, 10, 14, 0.56) 52%,
+    rgba(10, 10, 14, 0.08) 100%
+  );
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.68) 45%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.68) 45%, #000 100%);
 }
 
 /* Custom minimal editorial scrollbar */
@@ -61,12 +102,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(113, 113, 122, 0.25);
+  background: rgba(110, 110, 115, 0.28);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(113, 113, 122, 0.45);
+  background: rgba(110, 110, 115, 0.48);
 }
 
 /* 3D Flip Flashcard Support */

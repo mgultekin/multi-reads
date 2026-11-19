@@ -201,42 +201,42 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
   return (
     <div
       ref={popoverRef}
-      className="fixed inset-x-4 bottom-4 md:inset-auto md:bottom-8 md:right-8 max-sm:!fixed max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!w-full max-sm:!max-w-none max-sm:!rounded-b-none max-sm:!rounded-t-xl z-50 md:w-96 max-h-[88vh] overflow-y-auto bg-[#FAF8F4] dark:bg-[#181615] rounded-lg border border-stone-200 dark:border-stone-800 p-5 text-stone-900 dark:text-stone-100 transition-colors animate-in fade-in slide-in-from-bottom-3"
+      className="fixed inset-x-4 bottom-4 md:inset-auto md:bottom-8 md:right-8 max-sm:!fixed max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!w-full max-sm:!max-w-none max-sm:!rounded-b-none max-sm:!rounded-t-3xl z-50 md:w-[400px] max-h-[88vh] overflow-y-auto bg-white/88 dark:bg-[#1C1C1E]/92 backdrop-blur-2xl rounded-2xl border border-black/[0.08] dark:border-white/[0.12] shadow-[0_24px_60px_-15px_rgba(0,0,0,0.24)] p-5 text-[#1D1D1F] dark:text-[#F5F5F7] transition-all animate-in fade-in slide-in-from-bottom-3"
       role="dialog"
       aria-modal="false"
       aria-label="Word Breakdown"
     >
-      {/* Header bar */}
-      <div className="flex items-center justify-between gap-2 pb-3 border-b border-stone-200 dark:border-stone-800">
-        <div className="flex items-center gap-1.5 text-[11px] text-amber-800 dark:text-amber-400 font-medium tracking-wide">
+      {/* Inspector Header Bar */}
+      <div className="flex items-center justify-between gap-2 pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+        <div className="flex items-center gap-1.5 text-[11px] text-[#0071E3] dark:text-[#0A84FF] font-medium tracking-wide">
           <Sparkles className="w-3 h-3" />
           <span>{engineLabel}</span>
           {breakdown && typeof breakdown.latencyMs === 'number' && !isLoading && (
             <>
-              <span aria-hidden="true" className="text-stone-300 dark:text-stone-700">·</span>
-              <span className="font-mono tabular-nums text-stone-400 dark:text-stone-500">
+              <span aria-hidden="true" className="text-black/20 dark:text-white/20">·</span>
+              <span className="font-mono tabular-nums text-[#6E6E73] dark:text-[#98989D]">
                 {breakdown.latencyMs === 0 ? '0ms' : `${breakdown.latencyMs}ms`}
               </span>
             </>
           )}
         </div>
 
-        {/* In-Popover Base Language Switcher */}
+        {/* Native Language Switcher & Close */}
         <div className="flex items-center gap-2">
           {onChangeNativeLang && (
-            <div className="flex items-center gap-1">
-              <Globe className="w-3 h-3 text-stone-400" />
+            <div className="flex items-center gap-1 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-2 py-0.5">
+              <Globe className="w-3 h-3 text-[#6E6E73] dark:text-[#98989D]" />
               <select
                 value={nativeLang}
                 onChange={(e) => onChangeNativeLang(e.target.value)}
-                className="text-[11px] font-medium bg-transparent border-b border-stone-300 dark:border-stone-700 pb-0.5 text-stone-700 dark:text-stone-300 focus:outline-none cursor-pointer"
+                className="text-[11px] font-medium bg-transparent text-[#1D1D1F] dark:text-[#F5F5F7] focus:outline-none cursor-pointer"
                 title="Change translation language"
               >
                 {BASE_LANGUAGES.map((bl) => (
                   <option
                     key={bl.code}
                     value={bl.name}
-                    className="bg-[#FAF8F4] dark:bg-[#181615] text-stone-900 dark:text-stone-100"
+                    className="bg-white dark:bg-[#1C1C1E] text-[#1D1D1F] dark:text-[#F5F5F7]"
                   >
                     {bl.flag} {bl.nativeName}
                   </option>
@@ -247,10 +247,10 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
 
           <button
             onClick={onClose}
-            className="text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 p-0.5 transition-colors cursor-pointer"
+            className="p-1 rounded-full bg-black/[0.05] dark:bg-white/[0.08] text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white transition-colors cursor-pointer"
             aria-label="Close breakdown"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -258,55 +258,92 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
       {breakdown ? (
         <div className="pt-3.5 space-y-3.5">
           {/* Main Word · IPA · Root Form */}
-          <div className="flex items-baseline justify-between gap-2 pb-3 border-b border-stone-200 dark:border-stone-800">
+          <div className="flex items-baseline justify-between gap-2 pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-serif text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
+                <h3 className="font-display text-2xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
                   {breakdown.word}
                 </h3>
                 <button
                   onClick={() => handlePlayAudio(breakdown.word)}
                   disabled={isPlayingAudio}
                   title="Pronounce word"
-                  className="p-1 text-stone-400 hover:text-amber-800 dark:hover:text-amber-400 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-full bg-black/[0.04] dark:bg-white/[0.06] text-[#6E6E73] dark:text-[#98989D] hover:text-[#0071E3] dark:hover:text-[#0A84FF] transition-colors cursor-pointer"
                 >
-                  <Volume2 className={`w-4 h-4 ${isPlayingAudio ? 'animate-pulse text-amber-800 dark:text-amber-400' : ''}`} />
+                  <Volume2 className={`w-3.5 h-3.5 ${isPlayingAudio ? 'animate-pulse text-[#0071E3] dark:text-[#0A84FF]' : ''}`} />
                 </button>
               </div>
 
               {breakdown.phoneticIpa && (
-                <p className="text-xs font-mono text-stone-400 dark:text-stone-500 mt-0.5">
+                <p className="text-xs font-mono text-[#6E6E73] dark:text-[#98989D] mt-0.5">
                   {breakdown.phoneticIpa}
                 </p>
               )}
             </div>
 
-            {/* Root / Lemma */}
             <div className="text-right">
-              <span className="text-[10px] text-stone-400 dark:text-stone-500 block uppercase tracking-wider">
+              <span className="text-[10px] text-[#6E6E73] dark:text-[#98989D] block uppercase tracking-wider">
                 Root Form
               </span>
-              <span className="font-serif text-sm font-semibold text-stone-700 dark:text-stone-300">
+              <span className="font-display text-sm font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
                 {breakdown.lemma}
               </span>
             </div>
           </div>
 
-          {/* Instant Contextual Meaning (Borderless Hairline Editorial Typography) */}
-          <div className="pb-3 border-b border-stone-200 dark:border-stone-800">
-            <span className="text-[10px] uppercase font-semibold text-amber-800 dark:text-amber-400 tracking-wider block mb-1">
+          {/* Contextual Meaning */}
+          <div>
+            <span className="text-[10px] uppercase font-semibold text-[#0071E3] dark:text-[#0A84FF] tracking-wider block mb-1">
               Meaning in Context ({nativeLang})
             </span>
             {isLoading && breakdown.translation === 'Translating in context...' ? (
-              <div className="flex items-center gap-2 py-0.5 text-stone-500 dark:text-stone-400">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-800 dark:text-amber-400" />
-                <span className="text-xs font-serif italic">Resolving contextual meaning...</span>
+              <div className="flex items-center gap-2 py-0.5 text-[#6E6E73] dark:text-[#98989D]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0071E3] dark:text-[#0A84FF]" />
+                <span className="text-xs font-reader italic">Resolving contextual meaning...</span>
               </div>
             ) : (
-              <p className="text-base font-medium text-stone-900 dark:text-stone-100 leading-snug">
+              <p className="text-base font-medium text-[#1D1D1F] dark:text-[#F5F5F7] leading-snug">
                 {breakdown.translation}
               </p>
             )}
+          </div>
+
+          {/* Subtle Textbook B1 vs. Original Inset Contrast Card */}
+          <div className="rounded-xl bg-black/[0.03] dark:bg-white/[0.04] border border-black/[0.05] dark:border-white/[0.06] p-3 space-y-2 text-xs">
+            <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-[#6E6E73] dark:text-[#98989D]">
+              <span>Textbook B1 vs. Original</span>
+              <button
+                onClick={() => handlePlayAudio(breakdown.contextSentence)}
+                title="Read authentic sentence aloud"
+                className="text-[#6E6E73] hover:text-[#0071E3] dark:hover:text-[#0A84FF] cursor-pointer"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="text-[11px] text-[#6E6E73] dark:text-[#98989D] leading-snug">
+              <span className="font-semibold text-red-600/80 dark:text-red-400/80 mr-1">× B1:</span>
+              <span>"{b1Sentence}"</span>
+            </div>
+
+            <div className="pt-1.5 border-t border-black/[0.05] dark:border-white/[0.06]">
+              <p className="font-reader italic text-xs text-[#1D1D1F] dark:text-[#F5F5F7] leading-relaxed">
+                <span className="not-italic font-sans font-semibold text-emerald-700 dark:text-emerald-400 mr-1">
+                  ✓ Original:
+                </span>
+                "{breakdown.contextSentence}"
+              </p>
+              {breakdown.sentenceTranslation ? (
+                <p className="text-[11px] text-[#6E6E73] dark:text-[#98989D] mt-1">
+                  → {breakdown.sentenceTranslation}
+                </p>
+              ) : (
+                <div className="flex items-center gap-1.5 text-[11px] text-[#6E6E73] mt-1 italic">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Translating sentence...</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Progressive Philology & Grammar Disclosure */}
@@ -314,16 +351,16 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
             <button
               type="button"
               onClick={() => setIsGrammarExpanded(!isGrammarExpanded)}
-              className="w-full flex items-center justify-between text-xs font-medium text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 py-0.5 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-between text-xs font-medium text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white py-0.5 transition-colors cursor-pointer"
             >
               <span>Grammar & Morphological Analysis</span>
               {isGrammarExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
             {isGrammarExpanded && (
-              <div className="mt-2 pl-3 border-l border-stone-300 dark:border-stone-700 text-xs space-y-1.5 animate-in fade-in duration-150">
-                <div className="flex items-start gap-1.5 text-stone-600 dark:text-stone-400">
-                  <span className="font-semibold text-stone-800 dark:text-stone-200 shrink-0">Role:</span>
+              <div className="mt-2 pl-3 border-l-2 border-[#0071E3]/30 dark:border-[#0A84FF]/30 text-xs space-y-1.5 animate-in fade-in duration-150">
+                <div className="flex items-start gap-1.5 text-[#6E6E73] dark:text-[#98989D]">
+                  <span className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] shrink-0">Role:</span>
                   <span>
                     {breakdown.partOfSpeech}
                     {breakdown.morphology ? ` · ${breakdown.morphology}` : ''}
@@ -331,7 +368,7 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
                 </div>
 
                 {breakdown.usageNote && (
-                  <p className="text-stone-500 dark:text-stone-400 italic text-[11px] leading-relaxed">
+                  <p className="text-[#6E6E73] dark:text-[#98989D] italic text-[11px] leading-relaxed">
                     {breakdown.usageNote}
                   </p>
                 )}
@@ -341,7 +378,7 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
                     type="button"
                     onClick={onRequestDeepAi}
                     disabled={breakdown.isEnriching}
-                    className="flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-400 hover:underline pt-1 cursor-pointer disabled:opacity-50"
+                    className="flex items-center gap-1.5 text-[11px] font-medium text-[#0071E3] dark:text-[#0A84FF] hover:underline pt-1 cursor-pointer disabled:opacity-50"
                   >
                     {breakdown.isEnriching ? (
                       <>
@@ -360,53 +397,26 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
             )}
           </div>
 
-          {/* Sentence Translation */}
-          <div className="border-t border-stone-200 dark:border-stone-800 pt-3">
-            <div className="flex items-center justify-between text-[11px] text-stone-400 dark:text-stone-500 mb-1.5 uppercase tracking-wider">
-              <span>Sentence ({nativeLang})</span>
-              <button
-                onClick={() => handlePlayAudio(breakdown.contextSentence)}
-                title="Read sentence aloud"
-                className="text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 p-0.5 cursor-pointer"
-              >
-                <Volume2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <p className="font-reader italic text-xs text-stone-800 dark:text-stone-200 border-l border-stone-300 dark:border-stone-700 pl-3 leading-relaxed">
-              "{breakdown.contextSentence}"
-            </p>
-            {breakdown.sentenceTranslation ? (
-              <p className="text-xs text-stone-600 dark:text-stone-400 mt-1.5 pl-3">
-                → {breakdown.sentenceTranslation}
-              </p>
-            ) : (
-              <div className="flex items-center gap-1.5 text-xs text-stone-400 mt-1.5 pl-3 italic">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                <span>Translating sentence...</span>
-              </div>
-            )}
-          </div>
-
-          {/* Actions: Save to Wordbook + Share X Card Toggle */}
+          {/* Actions: Apple System Blue + Save to Wordbook Pill + Share X Card */}
           <div className="pt-1 flex items-center gap-2">
             <button
               onClick={handleSave}
               disabled={savedLocally}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded text-xs font-medium transition-colors ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-4 rounded-full text-xs font-semibold transition-all ${
                 savedLocally
-                  ? 'border border-stone-300 dark:border-stone-700 text-stone-500 dark:text-stone-400'
-                  : 'bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-[#FAF8F4] dark:text-stone-900 cursor-pointer'
+                  ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25'
+                  : 'bg-[#0071E3] hover:bg-[#0077ED] dark:bg-[#0A84FF] dark:hover:bg-[#3395FF] text-white cursor-pointer shadow-xs'
               }`}
             >
               {savedLocally ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                  <Check className="w-3.5 h-3.5" />
                   Saved to Wordbook
                 </>
               ) : (
                 <>
                   <Bookmark className="w-3.5 h-3.5" />
-                  Save to Wordbook
+                  + Save to Wordbook
                 </>
               )}
             </button>
@@ -418,10 +428,10 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
                 setIsShareStudioOpen(!isShareStudioOpen);
                 setShareFeedback(null);
               }}
-              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded text-xs font-medium border transition-colors cursor-pointer ${
+              className={`flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
                 isShareStudioOpen
-                  ? 'border-amber-800 dark:border-amber-400 text-amber-900 dark:text-amber-300'
-                  : 'border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:border-stone-500'
+                  ? 'bg-black/[0.06] dark:bg-white/[0.1] border-[#0071E3] dark:border-[#0A84FF] text-[#0071E3] dark:text-[#0A84FF]'
+                  : 'border-black/[0.1] dark:border-white/[0.12] text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
               }`}
               title="Create shareable split-contrast card for X"
             >
@@ -432,21 +442,20 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
 
           {/* Split-Contrast X Card Studio Panel */}
           {isShareStudioOpen && (
-            <div className="mt-3 pt-3.5 border-t border-stone-200 dark:border-stone-800 text-xs space-y-2.5 animate-in fade-in duration-200">
-              {/* Header with Title & Theme Switcher */}
+            <div className="mt-3 pt-3.5 border-t border-black/[0.06] dark:border-white/[0.08] text-xs space-y-2.5 animate-in fade-in duration-200">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-stone-700 dark:text-stone-300 text-[10px] uppercase tracking-wider">
+                <span className="font-semibold text-[#6E6E73] dark:text-[#98989D] text-[10px] uppercase tracking-wider">
                   Split-Contrast Card (1200×675)
                 </span>
-                <div className="flex items-center gap-2.5 text-[11px]">
+                <div className="flex items-center p-0.5 rounded-full bg-black/[0.05] dark:bg-white/[0.07] text-[11px]">
                   <button
                     type="button"
                     data-testid="x-card-theme-parchment"
                     onClick={() => setCardTheme('parchment')}
-                    className={`pb-0.5 transition-colors cursor-pointer ${
+                    className={`px-2.5 py-0.5 rounded-full transition-colors cursor-pointer ${
                       cardTheme === 'parchment'
-                        ? 'text-amber-800 dark:text-amber-400 font-semibold border-b border-amber-800 dark:border-amber-400'
-                        : 'text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'
+                        ? 'bg-white dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-white font-semibold shadow-2xs'
+                        : 'text-[#6E6E73] dark:text-[#98989D]'
                     }`}
                   >
                     Parchment
@@ -455,10 +464,10 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
                     type="button"
                     data-testid="x-card-theme-obsidian"
                     onClick={() => setCardTheme('obsidian')}
-                    className={`pb-0.5 transition-colors cursor-pointer ${
+                    className={`px-2.5 py-0.5 rounded-full transition-colors cursor-pointer ${
                       cardTheme === 'obsidian'
-                        ? 'text-amber-800 dark:text-amber-400 font-semibold border-b border-amber-800 dark:border-amber-400'
-                        : 'text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'
+                        ? 'bg-white dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-white font-semibold shadow-2xs'
+                        : 'text-[#6E6E73] dark:text-[#98989D]'
                     }`}
                   >
                     Obsidian
@@ -466,24 +475,22 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
                 </div>
               </div>
 
-              {/* Live Canvas Preview */}
               <div className="relative">
                 <canvas
                   ref={canvasRef}
                   width={1200}
                   height={675}
                   data-testid="x-card-canvas"
-                  className="w-full aspect-video rounded border border-stone-200 dark:border-stone-800 bg-[#FAF8F4] dark:bg-stone-950"
+                  className="w-full aspect-video rounded-xl border border-black/[0.08] dark:border-white/[0.1] bg-[#F5F5F7] dark:bg-[#16161A]"
                 />
               </div>
 
-              {/* Action Buttons: Post on X, Download PNG, Copy Tweet */}
               <div className="grid grid-cols-3 gap-1.5 pt-0.5">
                 <button
                   type="button"
                   data-testid="x-card-post-btn"
                   onClick={handlePostOnX}
-                  className="flex items-center justify-center gap-1 py-1.5 px-2 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-[#FAF8F4] dark:text-stone-900 text-[11px] font-medium rounded transition-colors cursor-pointer"
+                  className="flex items-center justify-center gap-1 py-1.5 px-2 bg-[#1D1D1F] hover:bg-black dark:bg-[#F5F5F7] dark:hover:bg-white text-white dark:text-[#1D1D1F] text-[11px] font-semibold rounded-full transition-colors cursor-pointer"
                   title="Copies PNG image to clipboard and opens X tweet composer"
                 >
                   <ExternalLink className="w-3 h-3 shrink-0" />
@@ -494,7 +501,7 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
                   type="button"
                   data-testid="x-card-download-btn"
                   onClick={handleDownloadPng}
-                  className="flex items-center justify-center gap-1 py-1.5 px-2 border border-stone-300 dark:border-stone-700 hover:border-stone-500 text-stone-700 dark:text-stone-300 text-[11px] font-medium rounded transition-colors cursor-pointer"
+                  className="flex items-center justify-center gap-1 py-1.5 px-2 border border-black/[0.1] dark:border-white/[0.12] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7] text-[11px] font-medium rounded-full transition-colors cursor-pointer"
                   title="Download 1200x675 PNG directly"
                 >
                   <Download className="w-3 h-3 shrink-0" />
@@ -505,7 +512,7 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
                   type="button"
                   data-testid="x-card-copy-tweet-btn"
                   onClick={handleCopyTweet}
-                  className="flex items-center justify-center gap-1 py-1.5 px-2 border border-stone-300 dark:border-stone-700 hover:border-stone-500 text-stone-700 dark:text-stone-300 text-[11px] font-medium rounded transition-colors cursor-pointer"
+                  className="flex items-center justify-center gap-1 py-1.5 px-2 border border-black/[0.1] dark:border-white/[0.12] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7] text-[11px] font-medium rounded-full transition-colors cursor-pointer"
                   title="Copy formatted <=280c tweet hook text"
                 >
                   <Copy className="w-3 h-3 shrink-0" />
@@ -513,9 +520,8 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
                 </button>
               </div>
 
-              {/* Toast Feedback */}
               {shareFeedback && (
-                <div className="py-1 text-[11px] text-amber-800 dark:text-amber-400 text-center font-medium border-t border-stone-200 dark:border-stone-800 pt-2">
+                <div className="py-1 text-[11px] text-[#0071E3] dark:text-[#0A84FF] text-center font-medium border-t border-black/[0.06] dark:border-white/[0.08] pt-2">
                   {shareFeedback}
                 </div>
               )}

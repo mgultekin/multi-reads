@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, Moon, Sun, LogOut, User as UserIcon } from 'lucide-react';
+import { Settings, Moon, Sun, LogOut, User as UserIcon, Search } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { LanguageCode } from '../types/index.ts';
 import { SUPPORTED_LANGUAGES, BASE_LANGUAGES } from '../data/constants.ts';
@@ -21,6 +21,10 @@ interface NavbarProps {
   isHidden?: boolean;
   onSignInWithGoogle: () => void;
   onSignOut: () => void;
+  wordsReadToday?: number;
+  dailyWordGoal?: number;
+  savedWordsCount?: number;
+  onOpenDiscover?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -40,6 +44,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   isHidden = false,
   onSignInWithGoogle,
   onSignOut,
+  wordsReadToday = 0,
+  dailyWordGoal = 500,
+  savedWordsCount = 0,
+  onOpenDiscover,
 }) => {
   if (isHidden) {
     return null;
@@ -52,48 +60,52 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'social', label: 'Journal' },
   ];
 
+  const safeGoal = Math.max(50, dailyWordGoal || 500);
+  const safeRead = Math.max(0, wordsReadToday || 0);
+  const ringProgress = Math.min(1, safeRead / safeGoal);
+  const ringPct = Math.round(ringProgress * 100);
+  const radius = 9.5;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - ringProgress);
+
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-stone-200 dark:border-stone-800 bg-[#FAF8F4]/95 dark:bg-[#141312]/95 backdrop-blur-md transition-colors">
-      <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 px-4 sm:px-6 h-14">
-        {/* Left: Borderless Serif Wordmark + Quiet Language Pair Selector */}
-        <div className="flex items-center gap-4 shrink-0 min-w-0">
+    <header className="sticky top-0 z-40 w-full h-auto border-b border-black/[0.06] dark:border-white/[0.08] apple-glass-nav transition-colors">
+      <div className="max-w-5xl mx-auto flex items-center justify-between gap-3 px-4 sm:px-6 h-14">
+        {/* Left: Borderless Serif Wordmark + Quiet Language Pill */}
+        <div className="flex items-center gap-3 shrink-0 min-w-0">
           <button
             onClick={() => setActiveTab('library')}
             className="text-left cursor-pointer focus:outline-none group"
           >
-            <span className="font-display text-xl font-bold tracking-tight text-[#18181B] dark:text-[#F4F4F5] group-hover:text-[#9A3412] dark:group-hover:text-[#D97706] transition-colors">
+            <span className="font-display text-xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] group-hover:text-[#0071E3] dark:group-hover:text-[#0A84FF] transition-colors">
               FolioPress
             </span>
           </button>
 
-          <span aria-hidden="true" className="text-stone-300 dark:text-stone-700 text-xs hidden sm:inline">
-            |
-          </span>
-
-          <div className="flex items-center gap-1 text-xs">
+          <div className="flex items-center gap-1 rounded-full bg-black/[0.045] dark:bg-white/[0.07] border border-black/[0.05] dark:border-white/[0.08] px-2.5 py-1 text-xs">
             <select
               aria-label="Reading language"
               value={targetLang}
               onChange={(e) => setTargetLang(e.target.value as LanguageCode)}
-              className="bg-transparent font-medium text-[#18181B] dark:text-[#F4F4F5] hover:text-[#9A3412] dark:hover:text-[#D97706] cursor-pointer focus:outline-none transition-colors"
+              className="bg-transparent font-medium text-[#1D1D1F] dark:text-[#F5F5F7] cursor-pointer focus:outline-none"
             >
               {SUPPORTED_LANGUAGES.map((lang) => (
-                <option key={lang.code} value={lang.code} className="bg-[#FAF8F4] dark:bg-[#141312]">
-                  {lang.code.toUpperCase()} · {lang.name}
+                <option key={lang.code} value={lang.code} className="bg-white dark:bg-[#16161A]">
+                  {lang.code.toUpperCase()}
                 </option>
               ))}
             </select>
 
-            <span className="text-[#71717A] dark:text-[#A1A1AA] select-none px-0.5">→</span>
+            <span className="text-[#6E6E73] dark:text-[#98989D] select-none text-[11px]">→</span>
 
             <select
               aria-label="Translation language"
               value={nativeLang}
               onChange={(e) => setNativeLang(e.target.value)}
-              className="bg-transparent font-medium text-[#9A3412] dark:text-[#D97706] cursor-pointer focus:outline-none max-w-[90px] sm:max-w-none"
+              className="bg-transparent font-medium text-[#0071E3] dark:text-[#0A84FF] cursor-pointer focus:outline-none max-w-[82px] sm:max-w-none"
             >
               {BASE_LANGUAGES.map((b) => (
-                <option key={b.code} value={b.name} className="bg-[#FAF8F4] dark:bg-[#141312]">
+                <option key={b.code} value={b.name} className="bg-white dark:bg-[#16161A]">
                   {b.nativeName}
                 </option>
               ))}
@@ -101,18 +113,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Center: Clean Editorial Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-7 text-sm text-[#71717A] dark:text-[#A1A1AA]">
+        {/* Center: Apple macOS Segmented Navigation */}
+        <nav
+          aria-label="Primary"
+          className="hidden lg:flex items-center p-1 rounded-full bg-black/[0.045] dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.06] text-xs"
+        >
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`whitespace-nowrap py-1 border-b transition-colors cursor-pointer ${
+                className={`px-3.5 py-1 rounded-full whitespace-nowrap transition-all cursor-pointer ${
                   isActive
-                    ? 'text-[#18181B] dark:text-[#F4F4F5] font-medium border-[#9A3412] dark:border-[#D97706]'
-                    : 'border-transparent hover:text-[#18181B] dark:hover:text-[#F4F4F5]'
+                    ? 'bg-white dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-white font-semibold shadow-xs'
+                    : 'text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] font-medium'
                 }`}
               >
                 {item.label}
@@ -121,36 +136,84 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Right: Quiet Monochrome Streak, Sign-In Link, Theme & Settings */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Right: Discover Trigger, Live Apple Daily Mastery Ring, Streak, Account & Controls */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          {onOpenDiscover && (
+            <button
+              type="button"
+              onClick={onOpenDiscover}
+              title="Discover & Import (⌘K)"
+              aria-label="Discover and Import"
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] text-xs text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white transition-colors cursor-pointer"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span className="font-mono text-[10px]">⌘K</span>
+            </button>
+          )}
+
+          {/* Live SVG Apple Daily Mastery Ring */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('wordbook')}
+            title={`Daily Mastery: ${safeRead}/${safeGoal} words (${ringPct}%) · ${savedWordsCount} saved words — Open Wordbook`}
+            aria-label={`Daily Mastery ${ringPct}% (${savedWordsCount} saved words)`}
+            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" className="-rotate-90 shrink-0">
+              <circle
+                cx="12"
+                cy="12"
+                r={radius}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                className="text-black/[0.09] dark:text-white/[0.12]"
+              />
+              <circle
+                cx="12"
+                cy="12"
+                r={radius}
+                fill="none"
+                stroke={ringProgress >= 1 ? '#34C759' : 'var(--accent-apple)'}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={dashOffset}
+                className="transition-all duration-500"
+              />
+            </svg>
+            {savedWordsCount > 0 && (
+              <span className="hidden md:inline text-[11px] font-mono tabular-nums text-[#6E6E73] dark:text-[#98989D]">
+                {savedWordsCount}w
+              </span>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveTab('social')}
-            title={`${streakDays} day reading streak — View Journal`}
-            className="hidden sm:inline-block text-xs font-mono tabular-nums text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
+            title={`${streakDays} day reading streak — Open Journal`}
+            className="hidden sm:inline-block text-xs font-mono tabular-nums text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] transition-colors cursor-pointer"
           >
             {streakDays}d
           </button>
 
           {isFirebaseConfigured &&
             (currentUser ? (
-              <div className="flex items-center gap-2 text-xs text-[#71717A] dark:text-[#A1A1AA]">
+              <div className="flex items-center gap-1.5 text-xs text-[#6E6E73] dark:text-[#98989D]">
                 {currentUser.photoURL ? (
                   <img
                     src={currentUser.photoURL}
                     alt={currentUser.displayName || 'User'}
-                    className="w-5 h-5 rounded-full object-cover opacity-90"
+                    className="w-5 h-5 rounded-full object-cover"
                   />
                 ) : (
                   <UserIcon className="w-3.5 h-3.5" />
                 )}
-                <span className="max-w-[80px] truncate hidden md:inline text-[#18181B] dark:text-[#F4F4F5]">
-                  {currentUser.displayName || 'Account'}
-                </span>
                 <button
                   onClick={onSignOut}
                   title="Sign out"
-                  className="hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
+                  className="hover:text-[#1D1D1F] dark:hover:text-white transition-colors cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
@@ -158,7 +221,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             ) : (
               <button
                 onClick={onSignInWithGoogle}
-                className="text-xs font-medium text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
+                className="text-xs font-medium text-[#0071E3] dark:text-[#0A84FF] hover:underline transition-colors cursor-pointer"
                 title="Sign in with Google to sync reading data"
               >
                 Sign in
@@ -169,7 +232,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={toggleTheme}
             aria-label="Toggle dark mode"
             title="Toggle light / dark theme"
-            className="p-1 text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
+            className="p-1.5 rounded-full text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
           >
             {theme === 'light' ? <Moon className="w-4 h-4 stroke-[1.5]" /> : <Sun className="w-4 h-4 stroke-[1.5]" />}
           </button>
@@ -178,25 +241,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={openSettings}
             aria-label="Settings"
             title="Preferences & Free-Tier Quota Guardrail"
-            className="p-1 text-[#71717A] dark:text-[#A1A1AA] hover:text-[#18181B] dark:hover:text-[#F4F4F5] transition-colors cursor-pointer"
+            className="p-1.5 rounded-full text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
           >
             <Settings className="w-4 h-4 stroke-[1.5]" />
           </button>
         </div>
       </div>
 
-      {/* Mobile Sub-Navigation Bar */}
-      <div className="lg:hidden flex items-center justify-around border-t border-stone-200 dark:border-stone-800 px-3 py-2 bg-[#FAF8F4] dark:bg-[#141312] text-xs text-[#71717A] dark:text-[#A1A1AA]">
+      {/* Mobile Segmented Sub-Navigation */}
+      <div className="lg:hidden flex items-center justify-around border-t border-black/[0.06] dark:border-white/[0.08] px-3 py-2 text-xs text-[#6E6E73] dark:text-[#98989D]">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           return (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`px-2 py-0.5 border-b cursor-pointer transition-colors ${
+              className={`px-3 py-1 rounded-full cursor-pointer transition-colors ${
                 isActive
-                  ? 'text-[#18181B] dark:text-[#F4F4F5] font-medium border-[#9A3412] dark:border-[#D97706]'
-                  : 'border-transparent'
+                  ? 'bg-white dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-white font-semibold shadow-2xs'
+                  : ''
               }`}
             >
               {item.label}

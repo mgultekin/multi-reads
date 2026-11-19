@@ -1,4 +1,5 @@
 import { ContentItem, ContentSource, DailyNewsEdition, GenreId, LanguageCode } from '../types/index.ts';
+import { INITIAL_FULL_NOVELS } from '../data/fullNovelsData.ts';
 import { storageService } from './storageService.ts';
 
 const CURATED_GUTENBERG_IDS: Record<string, number> = {
@@ -132,26 +133,54 @@ class ContentService {
   }
 
   /**
-   * Fetch full text from Project Gutenberg via our Express proxy (/api/gutenberg/:id)
+   * Fetch full text from Project Gutenberg via our Express proxy (/api/gutenberg/:id),
+   * falling back cleanly to bundled 8-chapter full novels when completely offline.
    */
-  async fetchGutenbergBookContent(gutenbergId: string, _lang: LanguageCode = 'es', _title = ''): Promise<string[]> {
+  async fetchGutenbergBookContent(
+    gutenbergId: string,
+    lang: LanguageCode = 'es',
+    title = ''
+  ): Promise<string[]> {
     const numericId = this.getGutenbergNumericId(gutenbergId);
     if (!numericId) {
       throw new Error('This curated edition does not have a remote Project Gutenberg mirror ID.');
     }
 
-    const res = await fetch(`/api/gutenberg/${encodeURIComponent(numericId)}`);
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || `Project Gutenberg archive returned status ${res.status}`);
-    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
 
-    const data = await res.json();
-    if (data.success && typeof data.text === 'string' && data.text.length > 200) {
-      return this.chunkText(data.text, 500);
-    }
+    try {
+      const res = await fetch(`/api/gutenberg/${encodeURIComponent(numericId)}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Project Gutenberg archive returned status ${res.status}`);
+      }
 
-    throw new Error('Could not extract readable chapter text from Project Gutenberg.');
+      const data = await res.json();
+      if (data.success && typeof data.text === 'string' && data.text.length > 200) {
+        return this.chunkText(data.text, 900);
+      }
+
+      throw new Error('Could not extract readable chapter text from Project Gutenberg.');
+    } catch (err: any) {
+      clearTimeout(timer);
+      const numericNum = Number(numericId);
+      const cleanTitlePrefix = title.split(/[—(]/)[0].trim().toLowerCase();
+      const offlineMatch = INITIAL_FULL_NOVELS.find(
+        (b) =>
+          b.gutenbergId === numericNum ||
+          (cleanTitlePrefix.length >= 5 &&
+            b.language === lang &&
+            b.title.toLowerCase().includes(cleanTitlePrefix))
+      );
+      if (offlineMatch && offlineMatch.chunks.length >= 8) {
+        return [...offlineMatch.chunks];
+      }
+      throw new Error(err?.message || 'Remote Gutenberg mirrors are currently unavailable.');
+    }
   }
 
   /**
@@ -160,6 +189,7 @@ class ContentService {
    */
   async insertFullGutenbergNovel(book: ContentItem): Promise<ContentItem> {
     const gutenbergRef = book.gutenbergId ? String(book.gutenbergId) : book.id;
+    const numericId = this.getGutenbergNumericId(gutenbergRef);
     const fullChunks = await this.fetchGutenbergBookContent(
       gutenbergRef,
       book.language,
@@ -178,6 +208,8 @@ class ContentService {
       wordCount: totalWords,
       estimatedReadTimeMinutes: Math.max(5, Math.round(totalWords / 200)),
       isFullNovel: true,
+      gutenbergId: book.gutenbergId ?? (numericId ? Number(numericId) : undefined),
+      lastReadAt: Date.now(),
       currentChunkIndex: Math.min(book.currentChunkIndex || 0, Math.max(0, fullChunks.length - 1)),
     };
 
