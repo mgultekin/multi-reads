@@ -109,7 +109,7 @@ class StorageService {
           changed = true;
         } else if (
           (curated.isFullNovel && !existing.isFullNovel) ||
-          (curated.gutenbergId !== undefined && existing.gutenbergId === undefined)
+          (curated.gutenbergId !== undefined && existing.gutenbergId !== curated.gutenbergId)
         ) {
           upgraded.push({
             ...existing,

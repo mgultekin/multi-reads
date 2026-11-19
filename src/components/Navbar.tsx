@@ -70,19 +70,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="sticky top-0 z-40 w-full h-auto border-b border-black/[0.06] dark:border-white/[0.08] apple-glass-nav transition-colors">
-      <div className="max-w-5xl mx-auto flex items-center justify-between gap-3 px-4 sm:px-6 h-14">
+      <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-6 h-14">
         {/* Left: Borderless Serif Wordmark + Quiet Language Pill */}
-        <div className="flex items-center gap-3 shrink-0 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
           <button
             onClick={() => setActiveTab('library')}
             className="text-left cursor-pointer focus:outline-none group"
           >
-            <span className="font-display text-xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] group-hover:text-[#0071E3] dark:group-hover:text-[#0A84FF] transition-colors">
+            <span className="font-display text-lg sm:text-xl font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] group-hover:text-[#0071E3] dark:group-hover:text-[#0A84FF] transition-colors">
               FolioPress
             </span>
           </button>
 
-          <div className="flex items-center gap-1 rounded-full bg-black/[0.045] dark:bg-white/[0.07] border border-black/[0.05] dark:border-white/[0.08] px-2.5 py-1 text-xs">
+          <div className="flex items-center gap-0.5 sm:gap-1 rounded-full bg-black/[0.045] dark:bg-white/[0.07] border border-black/[0.05] dark:border-white/[0.08] px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs">
             <select
               aria-label="Reading language"
               value={targetLang}
@@ -96,13 +96,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               ))}
             </select>
 
-            <span className="text-[#6E6E73] dark:text-[#98989D] select-none text-[11px]">→</span>
+            <span className="text-[#6E6E73] dark:text-[#98989D] select-none text-[10px] sm:text-[11px]">→</span>
 
             <select
               aria-label="Translation language"
               value={nativeLang}
               onChange={(e) => setNativeLang(e.target.value)}
-              className="bg-transparent font-medium text-[#0071E3] dark:text-[#0A84FF] cursor-pointer focus:outline-none max-w-[82px] sm:max-w-none"
+              className="bg-transparent font-medium text-[#0071E3] dark:text-[#0A84FF] cursor-pointer focus:outline-none max-w-[68px] sm:max-w-none truncate"
             >
               {BASE_LANGUAGES.map((b) => (
                 <option key={b.code} value={b.name} className="bg-white dark:bg-[#16161A]">
@@ -137,17 +137,17 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* Right: Discover Trigger, Live Apple Daily Mastery Ring, Streak, Account & Controls */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {onOpenDiscover && (
             <button
               type="button"
               onClick={onOpenDiscover}
               title="Discover & Import (⌘K)"
               aria-label="Discover and Import"
-              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] text-xs text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1 rounded-full bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] text-xs text-[#6E6E73] dark:text-[#98989D] hover:text-[#1D1D1F] dark:hover:text-white transition-colors cursor-pointer"
             >
               <Search className="w-3.5 h-3.5" />
-              <span className="font-mono text-[10px]">⌘K</span>
+              <span className="hidden sm:inline font-mono text-[10px]">⌘K</span>
             </button>
           )}
 
@@ -249,23 +249,25 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Mobile Segmented Sub-Navigation */}
-      <div className="lg:hidden flex items-center justify-around border-t border-black/[0.06] dark:border-white/[0.08] px-3 py-2 text-xs text-[#6E6E73] dark:text-[#98989D]">
-        {navItems.map((item) => {
-          const isActive = activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`px-3 py-1 rounded-full cursor-pointer transition-colors ${
-                isActive
-                  ? 'bg-white dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-white font-semibold shadow-2xs'
-                  : ''
-              }`}
-            >
-              {item.label}
-            </button>
-          );
-        })}
+      <div className="lg:hidden border-t border-black/[0.06] dark:border-white/[0.08] px-3 py-1.5">
+        <div className="grid grid-cols-4 gap-1 p-0.5 rounded-full bg-black/[0.045] dark:bg-white/[0.06] text-[11px] text-[#6E6E73] dark:text-[#98989D]">
+          {navItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`py-1 px-2 rounded-full text-center truncate cursor-pointer transition-all ${
+                  isActive
+                    ? 'bg-white dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-white font-semibold shadow-2xs'
+                    : 'hover:text-[#1D1D1F] dark:hover:text-white font-medium'
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </header>
   );

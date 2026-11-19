@@ -1017,99 +1017,227 @@ Return strictly valid JSON adhering to the schema.`,
 const GUTENBERG_CATALOG_FALLBACK: Record<string, Array<{ id: number; title: string; author: string; subjects: string[] }>> = {
   es: [
     { id: 2000, title: 'Don Quijote', author: 'Miguel de Cervantes Saavedra', subjects: ['Fiction', 'Chivalry', 'Spanish literature'] },
-    { id: 49836, title: 'La Regenta', author: 'Leopoldo Alas (Clarín)', subjects: ['Fiction', 'Psychological fiction'] },
-    { id: 15532, title: 'Novelas Ejemplares', author: 'Miguel de Cervantes Saavedra', subjects: ['Short stories', 'Spanish literature'] },
-    { id: 32474, title: 'Historia verdadera de la conquista de la Nueva España', author: 'Bernal Díaz del Castillo', subjects: ['History', 'Mexico'] },
-    { id: 1619, title: 'La vida es sueño', author: 'Pedro Calderón de la Barca', subjects: ['Philosophy', 'Drama'] },
+    { id: 17073, title: 'La Regenta', author: 'Leopoldo Alas (Clarín)', subjects: ['Fiction', 'Psychological fiction', 'Spanish literature'] },
+    { id: 49836, title: 'Niebla', author: 'Miguel de Unamuno', subjects: ['Philosophy', 'Fiction', 'Existentialism'] },
+    { id: 61202, title: 'Novelas Ejemplares', author: 'Miguel de Cervantes Saavedra', subjects: ['Short stories', 'Spanish literature'] },
+    { id: 54436, title: 'Teatro selecto: La vida es sueño', author: 'Pedro Calderón de la Barca', subjects: ['Philosophy', 'Drama'] },
   ],
   fr: [
-    { id: 17989, title: 'Les Misérables', author: 'Victor Hugo', subjects: ['Fiction', 'Historical fiction'] },
-    { id: 4791, title: 'Voyage au centre de la Terre', author: 'Jules Verne', subjects: ['Science', 'Adventure'] },
-    { id: 18269, title: 'Pensées', author: 'Blaise Pascal', subjects: ['Philosophy', 'Essays'] },
-    { id: 4650, title: 'Candide', author: 'Voltaire', subjects: ['Philosophy', 'Fiction'] },
-    { id: 13951, title: 'Les Trois Mousquetaires', author: 'Alexandre Dumas', subjects: ['History', 'Fiction'] },
+    { id: 17489, title: 'Les Misérables — Tome I', author: 'Victor Hugo', subjects: ['Fiction', 'Historical fiction', 'French literature'] },
+    { id: 4791, title: 'Voyage au centre de la Terre', author: 'Jules Verne', subjects: ['Science', 'Adventure', 'French literature'] },
+    { id: 4650, title: 'Candide', author: 'Voltaire', subjects: ['Philosophy', 'Satire', 'French literature'] },
+    { id: 13951, title: 'Les Trois Mousquetaires', author: 'Alexandre Dumas', subjects: ['History', 'Adventure', 'French literature'] },
+    { id: 13846, title: 'Discours de la méthode', author: 'René Descartes', subjects: ['Philosophy', 'Science', 'Rationalism'] },
   ],
   de: [
-    { id: 5200, title: 'Die Verwandlung', author: 'Franz Kafka', subjects: ['Fiction'] },
-    { id: 7205, title: 'Also sprach Zarathustra', author: 'Friedrich Nietzsche', subjects: ['Philosophy'] },
-    { id: 2229, title: 'Faust: Der Tragödie erster Teil', author: 'Johann Wolfgang von Goethe', subjects: ['Philosophy', 'Drama'] },
-    { id: 2407, title: 'Die Leiden des jungen Werthers', author: 'Johann Wolfgang von Goethe', subjects: ['Fiction'] },
-    { id: 26537, title: 'Kinder- und Hausmärchen', author: 'Jacob & Wilhelm Grimm', subjects: ['Short stories', 'Folklore'] },
+    { id: 22367, title: 'Die Verwandlung', author: 'Franz Kafka', subjects: ['Fiction', 'Modernism', 'German literature'] },
+    { id: 7205, title: 'Also sprach Zarathustra', author: 'Friedrich Nietzsche', subjects: ['Philosophy', 'German literature'] },
+    { id: 2229, title: 'Faust: Der Tragödie erster Teil', author: 'Johann Wolfgang von Goethe', subjects: ['Philosophy', 'Drama', 'German literature'] },
+    { id: 2407, title: 'Die Leiden des jungen Werthers', author: 'Johann Wolfgang von Goethe', subjects: ['Fiction', 'Romance', 'German literature'] },
+    { id: 5323, title: 'Effi Briest', author: 'Theodor Fontane', subjects: ['Fiction', 'Realism', 'German literature'] },
   ],
   it: [
-    { id: 16865, title: 'Le avventure di Pinocchio', author: 'Carlo Collodi', subjects: ['Fiction', 'Stories'] },
-    { id: 1232, title: 'Il Principe', author: 'Niccolò Machiavelli', subjects: ['Essays', 'History'] },
-    { id: 1012, title: 'La Divina Commedia', author: 'Dante Alighieri', subjects: ['Philosophy', 'Fiction'] },
-    { id: 45201, title: 'I Promessi Sposi', author: 'Alessandro Manzoni', subjects: ['History', 'Fiction'] },
+    { id: 52484, title: 'Le avventure di Pinocchio', author: 'Carlo Collodi', subjects: ['Fiction', 'Stories', 'Italian literature'] },
+    { id: 45334, title: 'I Promessi Sposi', author: 'Alessandro Manzoni', subjects: ['History', 'Fiction', 'Italian literature'] },
+    { id: 1012, title: 'La Divina Commedia', author: 'Dante Alighieri', subjects: ['Philosophy', 'Epic poetry', 'Italian literature'] },
+    { id: 56775, title: 'Un cavallo nella luna: Novelle', author: 'Luigi Pirandello', subjects: ['Short stories', 'Fiction', 'Italian literature'] },
   ],
-  tr: [
-    { id: 16865, title: 'Selected World Public Domain Archive', author: 'Project Gutenberg Archive', subjects: ['Fiction', 'Literature'] },
-  ],
+  tr: [],
   en: [
-    { id: 1661, title: 'The Adventures of Sherlock Holmes', author: 'Arthur Conan Doyle', subjects: ['Fiction', 'Short stories'] },
+    { id: 1661, title: 'The Adventures of Sherlock Holmes', author: 'Arthur Conan Doyle', subjects: ['Fiction', 'Mystery', 'Short stories'] },
     { id: 205, title: 'Walden, and On The Duty Of Civil Disobedience', author: 'Henry David Thoreau', subjects: ['Philosophy', 'Science', 'Nature'] },
-    { id: 1342, title: 'Pride and Prejudice', author: 'Jane Austen', subjects: ['Fiction'] },
+    { id: 1342, title: 'Pride and Prejudice', author: 'Jane Austen', subjects: ['Fiction', 'Romance'] },
     { id: 2701, title: 'Moby-Dick; or, The Whale', author: 'Herman Melville', subjects: ['Fiction', 'Adventure'] },
-    { id: 2680, title: 'Meditations', author: 'Marcus Aurelius', subjects: ['Philosophy'] },
+    { id: 2680, title: 'Meditations', author: 'Marcus Aurelius', subjects: ['Philosophy', 'Stoicism'] },
   ],
 };
 
-// 3B. Server-Side Project Gutenberg Catalog Search Proxy (Eliminates CORS errors)
+// 3B. Server-Side Project Gutenberg Catalog Search Proxy & Resilient Multi-Tier Engine
+const MAX_GUTENBERG_SEARCH_CACHE = 60;
+const GUTENBERG_SEARCH_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const serverGutenbergSearchCache = new Map<string, { results: any[]; source: string; cachedAt: number }>();
+const gutenbergSearchInFlight = new Map<string, Promise<{ results: any[]; source: string }>>();
+let gutendexCooldownUntil = 0;
+
+async function searchInternetArchiveGutenberg(
+  langCode: string,
+  query: string = '',
+  topic: string = ''
+): Promise<Array<{ id: number; title: string; authors: { name: string }[]; subjects: string[]; download_count: number; formats: Record<string, string> }> | null> {
+  const IA_LANG_MAP: Record<string, string> = {
+    es: 'Spanish',
+    fr: 'French',
+    de: 'German',
+    it: 'Italian',
+    tr: 'Turkish',
+    en: 'English',
+  };
+  const langName = IA_LANG_MAP[langCode] || 'Spanish';
+  try {
+    const qParts = ['collection:gutenberg', `(language:${langName} OR language:${langCode})`];
+    if (query) {
+      const cleanQ = query.replace(/[^\w\s]/g, ' ').trim();
+      if (cleanQ) qParts.push(`(${cleanQ})`);
+    }
+    if (topic) {
+      const cleanTopic = topic.replace(/[^\w\s]/g, ' ').trim();
+      if (cleanTopic) qParts.push(`(subject:${cleanTopic})`);
+    }
+
+    const iaUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(
+      qParts.join(' AND ')
+    )}&fl[]=identifier,title,creator,subject,description&sort[]=downloads+desc&rows=15&output=json`;
+
+    const resp = await fetch(iaUrl, {
+      signal: AbortSignal.timeout(4500),
+      headers: { 'User-Agent': 'FolioPress/0.6 (Language Learning Reader)' },
+    });
+    if (!resp.ok) return null;
+
+    const data: any = await resp.json();
+    const docs = data?.response?.docs;
+    if (!Array.isArray(docs) || docs.length === 0) return null;
+
+    const results: Array<{ id: number; title: string; authors: { name: string }[]; subjects: string[]; download_count: number; formats: Record<string, string> }> = [];
+
+    for (const doc of docs) {
+      if (!doc?.title || !doc?.identifier) continue;
+      if (/\b(audio\s*book|librivox|audio\s*reading)\b/i.test(`${doc.title} ${doc.description || ''}`)) {
+        continue;
+      }
+      let numericId: number | null = null;
+      const gutMatch = String(doc.identifier).match(/(?:^|\D)(\d{1,6})(?:gut|$|\D)/i);
+      if (gutMatch) {
+        const parsed = parseInt(gutMatch[1], 10);
+        if (parsed > 0 && parsed < 1000000) {
+          numericId = parsed;
+        }
+      }
+      if (!numericId && doc.description) {
+        const descMatch = String(doc.description).match(/gutenberg\.org\/(?:ebooks\/|etext\d*\/)(\d{1,6})/i);
+        if (descMatch) {
+          numericId = parseInt(descMatch[1], 10);
+        }
+      }
+
+      if (numericId) {
+        const subjects = Array.isArray(doc.subject)
+          ? doc.subject.map(String)
+          : doc.subject ? [String(doc.subject)] : [langName, 'Literature'];
+        results.push({
+          id: numericId,
+          title: String(doc.title),
+          authors: [{ name: String(doc.creator || 'Classic Author') }],
+          subjects,
+          download_count: 2000,
+          formats: {},
+        });
+      }
+    }
+
+    return results.length > 0 ? results : null;
+  } catch (err) {
+    console.warn('[Gutenberg] Internet Archive search tier bypassed:', err);
+    return null;
+  }
+}
+
 app.get('/api/gutenberg/search', async (req: Request, res: Response): Promise<void> => {
   const lang = String(req.query.languages || 'es').slice(0, 5).toLowerCase();
   const query = String(req.query.search || '').trim();
   const topic = String(req.query.topic || '').trim();
+  const cacheKey = `${lang}__${query.toLowerCase()}__${topic.toLowerCase()}`;
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5500);
-    const url = `https://gutendex.com/books?languages=${encodeURIComponent(lang)}${
-      topic ? `&topic=${encodeURIComponent(topic)}` : ''
-    }${query ? `&search=${encodeURIComponent(query)}` : ''}`;
-
-    const resp = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'FolioPress/0.6 (Language Learning Reader)' },
-    });
-    clearTimeout(timeout);
-
-    if (resp.ok) {
-      const data = await resp.json();
-      if (Array.isArray(data?.results) && data.results.length > 0) {
-        res.json({ success: true, results: data.results.slice(0, 12), source: 'gutendex' });
-        return;
-      }
-    }
-  } catch (err) {
-    console.warn('Gutendex upstream search fallback triggered:', err);
+  // 1. Check server search cache
+  const cached = getServerCache(serverGutenbergSearchCache, cacheKey);
+  if (cached && Date.now() - cached.cachedAt < GUTENBERG_SEARCH_TTL_MS) {
+    res.json({ success: true, results: cached.results, source: cached.source, cached: true });
+    return;
   }
 
-  // Fallback curated catalog filtered by query/topic so Gutenberg tab always populates fast without CORS/hangs
-  const list = GUTENBERG_CATALOG_FALLBACK[lang] || GUTENBERG_CATALOG_FALLBACK.en;
-  const filtered = list.filter((item) => {
-    const qOk =
-      !query ||
-      item.title.toLowerCase().includes(query.toLowerCase()) ||
-      item.author.toLowerCase().includes(query.toLowerCase());
-    const tOk = !topic || item.subjects.some((s) => s.toLowerCase().includes(topic.toLowerCase()));
-    return qOk && (tOk || list.length <= 2);
-  });
+  // 2. Promise coalescing for in-flight queries
+  let searchPromise = gutenbergSearchInFlight.get(cacheKey);
+  if (!searchPromise) {
+    searchPromise = (async () => {
+      // Tier A: Gutendex (if not in cooldown)
+      if (Date.now() >= gutendexCooldownUntil) {
+        try {
+          const url = `https://gutendex.com/books?languages=${encodeURIComponent(lang)}${
+            topic ? `&topic=${encodeURIComponent(topic)}` : ''
+          }${query ? `&search=${encodeURIComponent(query)}` : ''}`;
 
-  const finalItems = (filtered.length > 0 ? filtered : list).map((item) => ({
-    id: item.id,
-    title: item.title,
-    authors: [{ name: item.author }],
-    subjects: item.subjects,
-    download_count: 1500,
-    formats: {},
-  }));
+          const resp = await fetch(url, {
+            signal: AbortSignal.timeout(3000), // reduced from 5500ms to 3000ms
+            headers: { 'User-Agent': 'FolioPress/0.6 (Language Learning Reader)' },
+          });
 
-  res.json({ success: true, results: finalItems, source: 'fallback-catalog' });
+          if (resp.ok) {
+            const data: any = await resp.json();
+            if (Array.isArray(data?.results) && data.results.length > 0) {
+              return { results: data.results.slice(0, 12), source: 'gutendex' };
+            }
+          } else {
+            gutendexCooldownUntil = Date.now() + 5 * 60 * 1000;
+          }
+        } catch (err) {
+          gutendexCooldownUntil = Date.now() + 5 * 60 * 1000;
+          console.warn('[Gutenberg] Gutendex timeout/error, entering 5-min cooldown:', err);
+        }
+      }
+
+      // Tier B: Internet Archive Gutenberg Collection (4500ms timeout)
+      const iaResults = await searchInternetArchiveGutenberg(lang, query, topic);
+      if (iaResults && iaResults.length > 0) {
+        return { results: iaResults.slice(0, 12), source: 'internet-archive' };
+      }
+
+      // Tier C: Static Gutenberg Catalog Fallback
+      const list = GUTENBERG_CATALOG_FALLBACK[lang] || GUTENBERG_CATALOG_FALLBACK.en || [];
+      const filtered = list.filter((item) => {
+        const qOk =
+          !query ||
+          item.title.toLowerCase().includes(query.toLowerCase()) ||
+          item.author.toLowerCase().includes(query.toLowerCase());
+        const tOk = !topic || item.subjects.some((s) => s.toLowerCase().includes(topic.toLowerCase()));
+        return qOk && (tOk || list.length <= 2);
+      });
+
+      const finalItems = (filtered.length > 0 ? filtered : list).map((item) => ({
+        id: item.id,
+        title: item.title,
+        authors: [{ name: item.author }],
+        subjects: item.subjects,
+        download_count: 1500,
+        formats: {},
+      }));
+
+      return { results: finalItems, source: 'fallback-catalog' };
+    })();
+
+    gutenbergSearchInFlight.set(cacheKey, searchPromise);
+  }
+
+  try {
+    const outcome = await searchPromise;
+    setServerCache(
+      serverGutenbergSearchCache,
+      cacheKey,
+      { results: outcome.results, source: outcome.source, cachedAt: Date.now() },
+      MAX_GUTENBERG_SEARCH_CACHE
+    );
+    res.json({ success: true, results: outcome.results, source: outcome.source, cached: false });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to search Gutenberg catalog.' });
+  } finally {
+    gutenbergSearchInFlight.delete(cacheKey);
+  }
 });
 
 // 4. Multi-Mirror Geo-Resilient Public-Domain Full-Text Proxy ($0.00 Stack)
 // Cascade: GITenberg (GitHub CDN) -> Internet Archive -> Direct Gutenberg Mirrors
 const serverGutenbergTextCache = new Map<string, { text: string; mirror: string }>();
+const gutenbergTextInFlight = new Map<string, Promise<{ text: string; mirror: string }>>();
+let gitenbergCooldownUntil = 0;
 
 function decodeGutenbergBuffer(buf: ArrayBuffer, filenameHint: string = ''): string {
   const bytes = new Uint8Array(buf);
@@ -1175,6 +1303,9 @@ function cleanAndUnwrapGutenbergText(rawText: string): string {
 }
 
 async function fetchFromGitenberg(rawId: string): Promise<{ text: string; mirror: string } | null> {
+  if (Date.now() < gitenbergCooldownUntil) {
+    return null;
+  }
   try {
     const searchUrl = `https://api.github.com/search/repositories?q=${encodeURIComponent(
       `org:GITenberg _${rawId} in:name`
@@ -1186,6 +1317,11 @@ async function fetchFromGitenberg(rawId: string): Promise<{ text: string; mirror
         Accept: 'application/vnd.github+json',
       },
     });
+    if (searchResp.status === 403 || searchResp.status === 429) {
+      gitenbergCooldownUntil = Date.now() + 90 * 1000;
+      console.warn(`[Gutenberg] GitHub API rate-limited (${searchResp.status}). Cooldown for 90s.`);
+      return null;
+    }
     if (!searchResp.ok) return null;
 
     const searchData: any = await searchResp.json();
@@ -1345,25 +1481,55 @@ app.get('/api/gutenberg/:id', async (req: Request, res: Response): Promise<void>
 
     const cached = getServerCache(serverGutenbergTextCache, rawId);
     if (cached) {
-      res.json({ success: true, text: cached.text, mirror: cached.mirror, cached: true });
+      res.json({
+        success: true,
+        text: cached.text,
+        mirror: cached.mirror,
+        charCount: cached.text.length,
+        cached: true,
+      });
       return;
     }
 
-    const result =
-      (await fetchFromGitenberg(rawId)) ||
-      (await fetchFromInternetArchive(rawId)) ||
-      (await fetchFromDirectGutenberg(rawId));
+    let textPromise = gutenbergTextInFlight.get(rawId);
+    if (!textPromise) {
+      textPromise = (async () => {
+        const result =
+          (await fetchFromGitenberg(rawId)) ||
+          (await fetchFromInternetArchive(rawId)) ||
+          (await fetchFromDirectGutenberg(rawId));
+        if (!result) {
+          throw new Error(`All remote mirrors unavailable for #${rawId}`);
+        }
+        return result;
+      })();
+      gutenbergTextInFlight.set(rawId, textPromise);
+    }
 
-    if (!result) {
+    let result: { text: string; mirror: string };
+    try {
+      result = await textPromise;
+    } catch (fetchErr: any) {
       console.warn(`[Gutenberg] All remote mirrors unavailable for #${rawId}`);
       res.status(502).json({
         error:
           'Remote Gutenberg mirrors are currently unreachable from this network. Check connection or read a bundled Full Novel edition.',
       });
       return;
+    } finally {
+      gutenbergTextInFlight.delete(rawId);
     }
 
     const cleaned = cleanAndUnwrapGutenbergText(result.text);
+    if (
+      /^(?:This audio reading of |Audio reading of )/i.test(cleaned) ||
+      (cleaned.length < 6000 && /\b\d{2}:\d{2}:\d{2}\b/.test(cleaned))
+    ) {
+      res.status(422).json({
+        error: 'This Gutenberg ID is an audiobook index rather than readable text. Please choose a text edition.',
+      });
+      return;
+    }
     // Support complete multi-chapter novel manuscripts up to ~450,000 chars, cut cleanly on paragraph boundary
     let excerpt = cleaned.slice(0, 450000);
     if (cleaned.length > 450000) {
@@ -1375,7 +1541,13 @@ app.get('/api/gutenberg/:id', async (req: Request, res: Response): Promise<void>
 
     console.log(`[Gutenberg] Loaded #${rawId} (${excerpt.length} chars) via ${result.mirror}`);
     setServerCache(serverGutenbergTextCache, rawId, { text: excerpt, mirror: result.mirror }, 24);
-    res.json({ success: true, text: excerpt, mirror: result.mirror });
+    res.json({
+      success: true,
+      text: excerpt,
+      mirror: result.mirror,
+      charCount: excerpt.length,
+      cached: false,
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to fetch Gutenberg text.' });
   }

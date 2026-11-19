@@ -4,15 +4,13 @@ import { storageService } from './storageService.ts';
 
 const CURATED_GUTENBERG_IDS: Record<string, number> = {
   'es-quixote': 2000,
-  'fr-pensees': 18269,
   'fr-verne': 4791,
-  'de-verwandlung': 5200,
+  'de-verwandlung': 22367,
   'de-zarathustra': 7205,
-  'it-pinocchio': 16865,
-  'it-machiavelli': 1232,
+  'it-pinocchio': 52484,
   'en-sherlock': 1661,
   'en-walden': 205,
-  'es-historia': 32474,
+  'en-aurelius': 2680,
 };
 
 const WIKI_TOPICS: Record<LanguageCode, Record<GenreId, string[]>> = {
@@ -161,7 +159,7 @@ class ContentService {
 
       const data = await res.json();
       if (data.success && typeof data.text === 'string' && data.text.length > 200) {
-        return this.chunkText(data.text, 900);
+        return this.chunkManuscriptByChapters(data.text);
       }
 
       throw new Error('Could not extract readable chapter text from Project Gutenberg.');
@@ -358,6 +356,149 @@ class ContentService {
       estimatedReadTimeMinutes: Math.max(1, Math.round(words / 200)),
       createdAt: Date.now(),
     };
+  }
+
+  /**
+   * Splits a full manuscript cleanly along multilingual chapter/section headings,
+   * merges short title stubs (< 40 words) with following body text, and subdivides
+   * long chapters (> 1,400 words) on paragraph boundaries into ~900-word parts.
+   */
+  chunkManuscriptByChapters(text: string, maxWordsPerPart: number = 1100): string[] {
+    const normalized = (text || '').replace(/\r\n/g, '\n').trim();
+    if (!normalized) return [''];
+
+    const paragraphs = normalized
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    const chapterHeadingRegex =
+      /^(?:Cap[íi]tulo|Chapitre|Kapitel|Capitolo|B[öo]l[üu]m|Chapter|Canto|Acto|Acte|Akt|Atto|Letter|Carta|Lettre|Brief|Book|Libro|Livre|Buch|Parte|Part|Tome|Erstes|Zweites|Drittes)\b[^\n]{0,100}$/i;
+    const numberedChapterLineRegex =
+      /^(?:Cap[íi]tulo|Chapitre|Kapitel|Capitolo|B[öo]l[üu]m|Chapter|Canto|Acto|Acte|Akt|Atto|Letter|Carta|Lettre|Brief|Book|Libro|Livre|Buch|Parte|Part|Tome|Erstes|Zweites|Drittes)\s+(?:[IVXLCDM\d]+|Un[oa]?|Dos|Tres|I+|First|Second|Third|Premi[èe]re?|Deuxi[èe]me|Troisi[èe]me)\b/i;
+    const romanDotRegex = /^[IVXLCDM]{1,7}\.$/;
+    const romanBareRegex = /^(?!I$)[IVXLCDM]{1,7}$/;
+
+    const isChapterParagraph = (para: string): { isHeading: boolean; heading: string; remainder: string } => {
+      const lines = para.split('\n').map((l) => l.trim()).filter(Boolean);
+      const firstLine = lines[0] || '';
+      if (lines.length === 1) {
+        if (
+          chapterHeadingRegex.test(firstLine) ||
+          romanDotRegex.test(firstLine) ||
+          romanBareRegex.test(firstLine)
+        ) {
+          return { isHeading: true, heading: firstLine, remainder: '' };
+        }
+        return { isHeading: false, heading: '', remainder: para };
+      }
+
+      if (
+        (lines.length <= 2 && para.length <= 140 && chapterHeadingRegex.test(firstLine)) ||
+        (firstLine.length <= 100 && numberedChapterLineRegex.test(firstLine))
+      ) {
+        return {
+          isHeading: true,
+          heading: lines.length === 2 && lines[1].length <= 90 ? `${firstLine} — ${lines[1]}` : firstLine,
+          remainder: lines.length === 2 && lines[1].length <= 90 ? '' : lines.slice(1).join('\n'),
+        };
+      }
+
+      return { isHeading: false, heading: '', remainder: para };
+    };
+
+    const parsed = paragraphs.map((p) => ({ raw: p, ...isChapterParagraph(p) }));
+    const headingCount = parsed.filter((p) => p.isHeading).length;
+
+    if (headingCount < 2) {
+      return this.chunkText(normalized, 900);
+    }
+
+    type Section = { heading: string; bodyParagraphs: string[] };
+    const rawSections: Section[] = [];
+    let current: Section = { heading: '', bodyParagraphs: [] };
+
+    for (const item of parsed) {
+      if (item.isHeading) {
+        if (current.heading || current.bodyParagraphs.length > 0) {
+          rawSections.push(current);
+        }
+        current = {
+          heading: item.heading,
+          bodyParagraphs: item.remainder ? [item.remainder] : [],
+        };
+      } else {
+        current.bodyParagraphs.push(item.raw);
+      }
+    }
+    if (current.heading || current.bodyParagraphs.length > 0) {
+      rawSections.push(current);
+    }
+
+    // Merge tiny title-only preamble or heading stubs (< 40 words) into neighboring section
+    const countSectionWords = (sec: Section): number => {
+      const combined = [sec.heading, ...sec.bodyParagraphs].filter(Boolean).join(' ');
+      return combined.trim().split(/\s+/).filter(Boolean).length;
+    };
+
+    const mergedSections: Section[] = [];
+    let carryPrefix: string[] = [];
+
+    for (const sec of rawSections) {
+      const combinedBody = [...carryPrefix, ...sec.bodyParagraphs];
+      const candidate: Section = {
+        heading: sec.heading,
+        bodyParagraphs: combinedBody,
+      };
+      carryPrefix = [];
+
+      if (countSectionWords(candidate) < 40) {
+        // Carry short preamble/title stub into the following chapter
+        if (candidate.heading) carryPrefix.push(candidate.heading);
+        carryPrefix.push(...candidate.bodyParagraphs);
+      } else {
+        mergedSections.push(candidate);
+      }
+    }
+
+    if (carryPrefix.length > 0) {
+      if (mergedSections.length > 0) {
+        mergedSections[mergedSections.length - 1].bodyParagraphs.push(...carryPrefix);
+      } else {
+        mergedSections.push({ heading: '', bodyParagraphs: carryPrefix });
+      }
+    }
+
+    const chapterLimit = Math.max(1400, maxWordsPerPart);
+    const finalChunks: string[] = [];
+
+    for (const sec of mergedSections) {
+      const bodyText = sec.bodyParagraphs.join('\n\n').trim();
+      const fullText = sec.heading
+        ? bodyText
+          ? `${sec.heading}\n\n${bodyText}`
+          : sec.heading
+        : bodyText;
+
+      const totalWords = fullText.split(/\s+/).filter(Boolean).length;
+      if (totalWords > chapterLimit) {
+        const subParts = this.chunkText(bodyText || fullText, 900);
+        if (sec.heading && subParts.length > 1) {
+          const cleanHeading = sec.heading.replace(/\s+/g, ' ').replace(/[\s.:;—–-]+$/, '').trim();
+          subParts.forEach((part, idx) => {
+            finalChunks.push(`${cleanHeading} (Part ${idx + 1}/${subParts.length})\n\n${part}`);
+          });
+        } else if (sec.heading && subParts.length === 1) {
+          finalChunks.push(fullText);
+        } else {
+          finalChunks.push(...subParts);
+        }
+      } else if (fullText) {
+        finalChunks.push(fullText);
+      }
+    }
+
+    return finalChunks.length > 0 ? finalChunks : this.chunkText(normalized, 900);
   }
 
   /**

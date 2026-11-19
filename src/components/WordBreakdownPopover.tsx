@@ -201,7 +201,7 @@ export const WordBreakdownPopover: React.FC<WordBreakdownPopoverProps> = ({
   return (
     <div
       ref={popoverRef}
-      className="fixed inset-x-4 bottom-4 md:inset-auto md:bottom-8 md:right-8 max-sm:!fixed max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!w-full max-sm:!max-w-none max-sm:!rounded-b-none max-sm:!rounded-t-3xl z-50 md:w-[400px] max-h-[88vh] overflow-y-auto bg-white/88 dark:bg-[#1C1C1E]/92 backdrop-blur-2xl rounded-2xl border border-black/[0.08] dark:border-white/[0.12] shadow-[0_24px_60px_-15px_rgba(0,0,0,0.24)] p-5 text-[#1D1D1F] dark:text-[#F5F5F7] transition-all animate-in fade-in slide-in-from-bottom-3"
+      className="fixed inset-x-3 bottom-3 max-h-[82vh] overflow-y-auto rounded-3xl sm:inset-auto sm:bottom-8 sm:right-8 sm:w-[400px] sm:max-h-[86vh] sm:rounded-2xl z-50 bg-white/88 dark:bg-[#1C1C1E]/92 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.12] shadow-[0_24px_60px_-15px_rgba(0,0,0,0.24)] p-5 text-[#1D1D1F] dark:text-[#F5F5F7] transition-all animate-in fade-in slide-in-from-bottom-3"
       role="dialog"
       aria-modal="false"
       aria-label="Word Breakdown"

@@ -81,7 +81,7 @@ Espadas en alto, ambos contendientes se midieron bajo la mirada angustiada de la
 
   buildNovel({
     id: 'full-es-regenta',
-    gutenbergId: 49836,
+    gutenbergId: 17073,
     title: 'La Regenta — Edición Novela Completa (Capítulos I–VIII)',
     author: 'Leopoldo Alas Clarín',
     language: 'es',
@@ -262,7 +262,7 @@ Un jour, ils rendirent visite à un bon vieillard turc qui respirait la séréni
 const GERMAN_NOVELS: ContentItem[] = [
   buildNovel({
     id: 'full-de-verwandlung',
-    gutenbergId: 5200,
+    gutenbergId: 22367,
     title: 'Die Verwandlung — Vollständige Novelle (Kapitel I–VIII)',
     author: 'Franz Kafka',
     language: 'de',
@@ -382,7 +382,7 @@ Als die Uhr des Turmes Mitternacht schlug, setzte der unglückliche Freund seine
 const ITALIAN_NOVELS: ContentItem[] = [
   buildNovel({
     id: 'full-it-pinocchio',
-    gutenbergId: 16865,
+    gutenbergId: 52484,
     title: 'Le Avventure di Pinocchio — Romanzo Completo (Capitoli I–VIII)',
     author: 'Carlo Collodi',
     language: 'it',
@@ -441,7 +441,7 @@ Sfruttando il momento in cui il mostro dormiva a bocca spalancata per l'asma sot
 
   buildNovel({
     id: 'full-it-promessi',
-    gutenbergId: 45201,
+    gutenbergId: 45334,
     title: 'I Promessi Sposi — Romanzo Completo (Capitoli I–VIII)',
     author: 'Alessandro Manzoni',
     language: 'it',

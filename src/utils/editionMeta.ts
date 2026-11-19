@@ -74,11 +74,30 @@ export function extractChapterTitle(
     .map((line) => line.trim())
     .find(Boolean);
 
-  const chapterHeadingPattern =
-    /^(Cap[íi]tulo|Chapitre|Kapitel|Capitolo|B[öo]l[üu]m|Chapter|Part|Parte)\b/i;
+  if (!firstLine) {
+    return isFullNovel ? `Chapter ${index + 1}` : `Part ${index + 1}`;
+  }
 
-  if (firstLine && firstLine.length <= 84 && chapterHeadingPattern.test(firstLine)) {
-    return firstLine;
+  const normalized = firstLine.replace(/\s+/g, ' ').trim();
+  const chapterHeadingPattern =
+    /^(?:Cap[íi]tulo|Chapitre|Kapitel|Capitolo|B[öo]l[üu]m|Chapter|Canto|Acto|Acte|Akt|Atto|Letter|Carta|Lettre|Brief|Book|Libro|Livre|Buch|Parte|Part|Tome|Erstes|Zweites|Drittes)\b/i;
+  const romanHeadingPattern = /^(?:[IVXLCDM]{1,7}\.|(?!I$)[IVXLCDM]{1,7})$/;
+  const hasPartTag = /\(Part\s+\d+\/\d+\)$/i.test(normalized);
+
+  if (
+    normalized.length <= 115 &&
+    (chapterHeadingPattern.test(normalized) || romanHeadingPattern.test(normalized) || hasPartTag)
+  ) {
+    const cleaned = normalized.replace(/[\s.:;—–-]+$/, '').trim();
+    if (cleaned.length <= 84) {
+      return cleaned;
+    }
+    const partMatch = cleaned.match(/\s*\(Part\s+\d+\/\d+\)$/i);
+    if (partMatch) {
+      const baseBudget = 84 - partMatch[0].length - 1;
+      return `${cleaned.slice(0, Math.max(16, baseBudget)).trim()}…${partMatch[0]}`;
+    }
+    return `${cleaned.slice(0, 81).trim()}…`;
   }
 
   return isFullNovel ? `Chapter ${index + 1}` : `Part ${index + 1}`;
